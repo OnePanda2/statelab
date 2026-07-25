@@ -1,0 +1,16 @@
+# StateLab — Cargo workspace (IMPLEMENTATION DECISION §3.4).
+# Members: the pure engine library (statelab-engine) + the Tauri shell binary (src-tauri).
+# The engine has ZERO Tauri dependency — the "only the engine computes mathematics"
+# boundary is compiler-enforced (§3.3).
+[workspace]
+resolver = "2"
+members = [
+    "crates/statelab-engine",
+    "crates/statelab-dataset",
+    "crates/statelab-app",
+    "src-tauri",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"

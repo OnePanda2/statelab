@@ -1,0 +1,12 @@
+[package]
+name = "statelab-dataset"
+version = "0.1.0"
+description = "Dataset Explorer generators + streaming (§6.2), shared by the StateLab hosts. Host-side input generation only — contains no trajectory mathematics."
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+statelab-engine = { path = "../statelab-engine" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+num-bigint = "0.4"

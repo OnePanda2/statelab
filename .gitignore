@@ -1,0 +1,49 @@
+# Rust
+/target
+**/target
+
+# Node / frontend
+node_modules
+dist
+dist-ssr
+.vite
+
+# Tauri build output
+src-tauri/target
+src-tauri/gen
+
+# Packaging output (build artifacts, regenerate with scripts/package.sh)
+dist-package/
+statelab-*.zip
+StateLab.exe
+
+# Criterion benchmark output
+criterion/
+
+# Editor / OS
+.DS_Store
+*.log
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code machine-local settings (per-developer, not shared)
+.claude/settings.local.json
+.claude/**/*.tmp.*
+
+# Secrets — never commit credentials of any kind
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+secrets.json
+.npmrc
+.cargo/credentials
+.cargo/credentials.toml
+
+# Tauri signing keys (updater)
+*.tauri-key
+*.tauri-key.pub

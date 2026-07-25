@@ -1,0 +1,23 @@
+[package]
+name = "statelab"
+version = "0.1.0"
+description = "StateLab desktop shell (Tauri). Thin IPC wrappers around statelab-engine — contains no trajectory mathematics."
+edition.workspace = true
+license.workspace = true
+
+# Produces the desktop binary bundled by `tauri build`.
+[[bin]]
+name = "statelab"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# The engine and dataset generators. The dependency only ever points this way:
+# the shell calls into the engine, never the reverse (§3.3).
+statelab-engine = { path = "../crates/statelab-engine" }
+statelab-dataset = { path = "../crates/statelab-dataset" }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

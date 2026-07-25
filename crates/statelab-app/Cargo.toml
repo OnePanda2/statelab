@@ -1,0 +1,20 @@
+[package]
+name = "statelab-app"
+version = "0.1.0"
+description = "StateLab browser host: embeds the engine, serves the UI on loopback, opens the default browser. An alternative to the Tauri desktop shell for environments without a WebView."
+edition.workspace = true
+license.workspace = true
+
+# Produces `StateLabServer.exe`.
+#
+# NOTE: this must NOT be named `StateLab`. The Tauri shell (`src-tauri`) builds a
+# binary called `statelab`, and Windows filenames are case-insensitive — identical
+# names would make the two hosts overwrite each other in `target/release`.
+[[bin]]
+name = "StateLabServer"
+path = "src/main.rs"
+
+[dependencies]
+statelab-engine = { path = "../statelab-engine" }
+statelab-dataset = { path = "../statelab-dataset" }
+serde_json = "1"
