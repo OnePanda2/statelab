@@ -30,8 +30,44 @@ export default function App(): JSX.Element {
   const controller = useMemo(() => new ResearchController(), []);
   const [value, setValue] = useState('27');
   const [trajectory, setTrajectory] = useState<Trajectory | null>(null);
+  // Every trajectory run this session, for the Coral overlay. Charts, metrics and
+  // export always describe the most recent one; the Coral draws them all until
+  // the user presses Reset.
+  const [coralTrajectories, setCoralTrajectories] = useState<Trajectory[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [coralProgress, setCoralProgress] = useState<number | null>(null);
+  const [coralError, setCoralError] = useState<string | null>(null);
+
+  /**
+   * Runs a contiguous range and appends it to the Coral overlay. Lives here, not
+   * in the visualization: the Research Controller is the only layer permitted to
+   * trigger computation (§5.1), and visualizations may not reach it (§5.2).
+   */
+  async function addCoralRange(from: number, to: number): Promise<void> {
+    const count = to - from + 1;
+    setCoralError(null);
+    setCoralProgress(0);
+    const batch: Trajectory[] = [];
+    try {
+      for (let n = from; n <= to; n++) {
+        batch.push(await controller.run(String(n)));
+        if (batch.length % 25 === 0) {
+          setCoralProgress(Math.round((batch.length / count) * 100));
+          // Yield so the progress indicator actually paints during a long run.
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+    } catch (e) {
+      setCoralError(e instanceof Error ? e.message : String(e));
+    } finally {
+      // Keep whatever completed rather than discarding partial work.
+      if (batch.length > 0) {
+        setCoralTrajectories((prev) => [...prev, ...batch]);
+      }
+      setCoralProgress(null);
+    }
+  }
 
   async function run(): Promise<void> {
     setBusy(true);
@@ -39,6 +75,7 @@ export default function App(): JSX.Element {
     try {
       const result = await controller.run(value.trim());
       setTrajectory(result);
+      setCoralTrajectories((prev) => [...prev, result]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -119,7 +156,16 @@ export default function App(): JSX.Element {
               Coral / branch visualization
             </h2>
             <div className="mb-4">
-              <CoralPanel trajectory={trajectory} />
+              <CoralPanel
+                trajectories={coralTrajectories}
+                onReset={() => {
+                  setCoralTrajectories([]);
+                  setCoralError(null);
+                }}
+                onAddRange={(from, to) => void addCoralRange(from, to)}
+                progress={coralProgress}
+                runError={coralError}
+              />
             </div>
 
             <h2 className="mb-2 text-xs uppercase tracking-wide text-slate-400">Export center</h2>
