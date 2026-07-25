@@ -14,7 +14,14 @@ function endpoint(points: { x: number; y: number }[]): { x: number; y: number } 
 
 describe('computeCoralPath (Appendix B parity)', () => {
   it('produces one point per transition plus the start', () => {
-    for (const rule of ['relative', 'absolute', 'rotate-before', 'rotate-after', 'alternating'] as const) {
+    for (const rule of [
+      'relative',
+      'absolute',
+      'rotate-before',
+      'rotate-after',
+      'alternating',
+      'aesthetic',
+    ] as const) {
       const path = computeCoralPath(APPENDIX_B_PARITY, RIGHT_ANGLE, rule);
       expect(path.length).toBe(APPENDIX_B_PARITY.length + 1); // 8
       expect(path[0]).toEqual({ x: 0, y: 0 });
@@ -54,6 +61,39 @@ describe('computeCoralPath (Appendix B parity)', () => {
     expect(alt).not.toEqual(rel);
     expect(alt.x).toBeCloseTo(3, 10);
     expect(alt.y).toBeCloseTo(4, 10);
+  });
+
+  it('aesthetic walks the parity sequence in reverse', () => {
+    // A parity sequence that is NOT a palindrome, so direction is observable.
+    const parity = [1, 0, 0];
+    const params: CoralParams = { oddAngle: 90, evenAngle: 0, lineLength: 1, rotation: 0 };
+    // Aesthetic signs the turn by parity (odd +, even −) and reverses the walk,
+    // so [1,0,0] is traversed as [0,0,1]: two straight steps, then a left turn.
+    const path = computeCoralPath(parity, params, 'aesthetic');
+    const end = endpoint(path);
+    expect(end.x).toBeCloseTo(2, 10);
+    expect(end.y).toBeCloseTo(1, 10);
+
+    // Feeding the already-reversed sequence walks [1,0,0]: turn 90° first, then
+    // two straight steps -> (0,3). A different endpoint confirms the traversal
+    // order genuinely matters (the sequence is not being read symmetrically).
+    const reversedInput = computeCoralPath([...parity].reverse(), params, 'aesthetic');
+    expect(endpoint(reversedInput).x).toBeCloseTo(0, 10);
+    expect(endpoint(reversedInput).y).toBeCloseTo(3, 10);
+  });
+
+  it('aesthetic gives trajectories with a shared tail a shared trunk', () => {
+    // Every Collatz trajectory ends ...4 -> 2 -> 1, i.e. a run of even steps.
+    // Reversed, that common tail leads, so the first segments must coincide —
+    // this is exactly what makes many overlaid paths form a trunk.
+    const params: CoralParams = { oddAngle: 20, evenAngle: -12, lineLength: 3, rotation: -90 };
+    const a = computeCoralPath([1, 0, 1, 0, 0, 0, 0], params, 'aesthetic'); // n=3
+    const b = computeCoralPath([1, 1, 0, 1, 0, 0, 0, 0], params, 'aesthetic'); // longer, same tail
+    // Both reversed sequences begin [0,0,0,0,...] -> first four segments identical.
+    for (let i = 0; i <= 4; i++) {
+      expect(a[i]?.x).toBeCloseTo(b[i]?.x ?? NaN, 10);
+      expect(a[i]?.y).toBeCloseTo(b[i]?.y ?? NaN, 10);
+    }
   });
 
   it('rotation offset rotates the whole drawing', () => {

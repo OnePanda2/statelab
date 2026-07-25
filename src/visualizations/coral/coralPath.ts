@@ -11,13 +11,18 @@
  * any engine-computation path.
  */
 
-/** The 5 FROZEN direction rules (§5.5); `relative` is the default. */
+/**
+ * Direction rules. The first five are the FROZEN set from §5.5 (`relative` is the
+ * default); **`aesthetic` is an addition requested after the frozen spec** and
+ * changes nothing about the other five.
+ */
 export type DirectionRule =
   | 'relative'
   | 'absolute'
   | 'rotate-before'
   | 'rotate-after'
-  | 'alternating';
+  | 'alternating'
+  | 'aesthetic';
 
 /** Human-readable labels for the direction-rule selector. */
 export const DIRECTION_RULES: { value: DirectionRule; label: string }[] = [
@@ -26,6 +31,7 @@ export const DIRECTION_RULES: { value: DirectionRule; label: string }[] = [
   { value: 'rotate-before', label: 'Rotate Before Drawing' },
   { value: 'rotate-after', label: 'Rotate After Drawing' },
   { value: 'alternating', label: 'Alternating' },
+  { value: 'aesthetic', label: 'Aesthetic (tree — overlay many)' },
 ];
 
 /** The geometric Coral parameters (§5.5). Opacity and scale are draw-time. */
@@ -61,6 +67,16 @@ const DEG = Math.PI / 180;
  *   the turn is accumulated for the next segment.
  * - **alternating**: the turn's sign alternates each step (+, −, +, …), producing
  *   symmetric branching; magnitude still comes from the parity bit.
+ * - **aesthetic**: `relative`, but the parity sequence is walked **in reverse** —
+ *   the path is traced from the trajectory's end (the fixed point 1) back to its
+ *   start. Give the odd and even angles opposite signs (e.g. +16° / −8°) so the
+ *   two parities bend opposite ways; roughly `even ≈ −odd/2` keeps the trunk
+ *   straight, since even steps outnumber odd about 2:1.
+ *   Because every Collatz trajectory ends `… → 4 → 2 → 1`, reversing means every
+ *   trajectory *begins* with that shared tail — so when many are drawn from a
+ *   common origin they overlap into a trunk and fan outward, producing the
+ *   classic Collatz-tree form. It only looks like a tree with many overlaid
+ *   trajectories; a single one is just one branch.
  *
  * Returns `parity.length + 1` points (the start plus one per segment).
  */
@@ -75,7 +91,11 @@ export function computeCoralPath(
   let y = 0;
   const points: Point[] = [{ x, y }];
 
-  parity.forEach((bit, i) => {
+  // Aesthetic walks the already-computed parity sequence backwards. This only
+  // reorders existing data — no parity is recomputed here (Principle #3).
+  const walk = rule === 'aesthetic' ? [...parity].reverse() : parity;
+
+  walk.forEach((bit, i) => {
     const turn = (bit === 1 ? params.oddAngle : params.evenAngle) * DEG;
 
     // Heading the segment is actually drawn along.
@@ -96,6 +116,15 @@ export function computeCoralPath(
         break;
       case 'alternating':
         heading += i % 2 === 0 ? turn : -turn;
+        drawHeading = heading;
+        break;
+      case 'aesthetic':
+        // Identical turn logic to `relative` — the sign comes from the angle
+        // parameters themselves, so odd and even bend opposite ways when the two
+        // angles have opposite signs. (Negating here instead would make both
+        // parities turn the same way and curl every path into a circle.)
+        // The *only* difference from `relative` is the reversed walk above.
+        heading += turn;
         drawHeading = heading;
         break;
     }

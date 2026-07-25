@@ -1,20 +1,31 @@
 /**
  * Coral / Branch Visualization canvas (§5.5).
  *
- * A pure consumer of the immutable Trajectory. It reads the **already-computed**
- * `parity_sequence` from `system_specific_metrics` (Principle #3 — it never
- * recomputes parity from `state_sequence`) and renders the turtle path from
- * [`coralPath`](./coralPath). If the parity metric is absent it shows the FROZEN
- * "Metric Not Supported" fallback (§5.2) rather than a blank or a crash.
+ * A pure consumer of immutable Trajectories. It reads each one's
+ * **already-computed** `parity_sequence` from `system_specific_metrics`
+ * (Principle #3 — it never recomputes parity from `state_sequence`) and renders
+ * the turtle path from [`coralPath`](./coralPath). If a trajectory's parity
+ * metric is absent it shows the FROZEN "Metric Not Supported" fallback (§5.2)
+ * rather than a blank or a crash.
+ *
+ * Accepts **many** trajectories: all are drawn from a common origin, which is
+ * what makes the `aesthetic` rule form a tree (see `computeCoralPath`).
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import type { Trajectory } from '@/types/trajectory';
 import { METRIC_NOT_SUPPORTED } from '@/types/trajectory';
-import { computeCoralPath, pathBounds, type CoralParams, type DirectionRule, type Point } from './coralPath';
+import {
+  computeCoralPath,
+  pathBounds,
+  type CoralParams,
+  type DirectionRule,
+  type Point,
+} from './coralPath';
 
 export interface CoralProps {
-  trajectory: Trajectory;
+  /** Trajectories to overlay. All share one origin. */
+  trajectories: Trajectory[];
   params: CoralParams;
   rule: DirectionRule;
   opacity: number;
@@ -25,7 +36,7 @@ export interface CoralProps {
 const ODD_COLOR = '#f0883e'; // orange — segments following an odd-parity transition
 const EVEN_COLOR = '#3fb950'; // green — segments following an even-parity transition
 
-/** Reads the pre-computed parity sequence off the Trajectory (never recomputed). */
+/** Reads the pre-computed parity sequence off a Trajectory (never recomputed). */
 function readParity(trajectory: Trajectory): number[] | null {
   const raw = trajectory.system_specific_metrics['parity_sequence'];
   if (!Array.isArray(raw)) {
@@ -35,7 +46,7 @@ function readParity(trajectory: Trajectory): number[] | null {
 }
 
 export function Coral({
-  trajectory,
+  trajectories,
   params,
   rule,
   opacity,
@@ -43,11 +54,14 @@ export function Coral({
   height = 360,
 }: CoralProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const parity = useMemo(() => readParity(trajectory), [trajectory]);
+  const parities = useMemo(
+    () => trajectories.map(readParity).filter((p): p is number[] => p !== null && p.length > 0),
+    [trajectories],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !parity) {
+    if (!canvas || parities.length === 0) {
       return;
     }
     const draw = (): void => {
@@ -62,11 +76,18 @@ export function Coral({
       canvas.height = Math.round(cssHeight * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssWidth, cssHeight);
-      if (parity.length === 0) {
-        return;
+
+      const aesthetic = rule === 'aesthetic';
+      if (aesthetic) {
+        // The tree reads best on true black.
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, cssWidth, cssHeight);
       }
-      const points = computeCoralPath(parity, params, rule);
-      drawCoral(ctx, cssWidth, cssHeight, points, parity, opacity, scale);
+
+      // Compute every path first so they can share one fit-to-canvas transform —
+      // without a common frame the overlay would not line up.
+      const paths = parities.map((parity) => computeCoralPath(parity, params, rule));
+      drawCoral(ctx, cssWidth, cssHeight, paths, parities, opacity, scale, aesthetic);
     };
 
     draw();
@@ -76,9 +97,20 @@ export function Coral({
       observer.observe(canvas);
     }
     return () => observer?.disconnect();
-  }, [parity, params, rule, opacity, scale, height]);
+  }, [parities, params, rule, opacity, scale, height]);
 
-  if (!parity) {
+  if (trajectories.length === 0) {
+    return (
+      <div
+        className="flex items-center justify-center rounded-lg bg-slate-950/50 text-slate-500"
+        style={{ height }}
+      >
+        Run a trajectory to draw the coral.
+      </div>
+    );
+  }
+
+  if (parities.length === 0) {
     return (
       <div
         className="flex items-center justify-center rounded-lg bg-slate-950/50 text-slate-500"
@@ -95,25 +127,29 @@ export function Coral({
       style={{ width: '100%', height, display: 'block' }}
       className="rounded-lg bg-slate-950/50"
       role="img"
-      aria-label={`Coral visualization for initial state ${trajectory.initial_state}`}
+      aria-label={`Coral visualization of ${trajectories.length} trajector${
+        trajectories.length === 1 ? 'y' : 'ies'
+      }`}
     />
   );
 }
 
-/** Draws the path, auto-fit to the canvas, then zoomed by the user `scale`. */
+/** Draws all paths under one shared fit-to-canvas transform. */
 function drawCoral(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  points: Point[],
-  parity: number[],
+  paths: Point[][],
+  parities: number[][],
   opacity: number,
   scale: number,
+  aesthetic: boolean,
 ): void {
-  if (points.length < 2) {
+  const all = paths.flat();
+  if (all.length < 2) {
     return;
   }
-  const bounds = pathBounds(points);
+  const bounds = pathBounds(all);
   const boxWidth = bounds.maxX - bounds.minX || 1;
   const boxHeight = bounds.maxY - bounds.minY || 1;
   const pad = 18;
@@ -128,19 +164,47 @@ function drawCoral(
   const projX = (x: number): number => ox + (x - cx) * s;
   const projY = (y: number): number => oy - (y - cy) * s;
 
+  if (aesthetic) {
+    // Monochrome hairlines: with hundreds overlaid, density does the drawing.
+    // Alpha falls off as the count rises so a large overlay does not clip to white.
+    const alpha = Math.max(0.05, Math.min(1, opacity / Math.sqrt(paths.length || 1)));
+    ctx.strokeStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
+    ctx.lineWidth = 0.7;
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = 1;
+    for (const path of paths) {
+      ctx.beginPath();
+      path.forEach((p, i) => {
+        const px = projX(p.x);
+        const py = projY(p.y);
+        if (i === 0) {
+          ctx.moveTo(px, py);
+        } else {
+          ctx.lineTo(px, py);
+        }
+      });
+      ctx.stroke();
+    }
+    return;
+  }
+
+  // Analytical modes: per-segment parity colouring, as before.
   ctx.globalAlpha = opacity;
   ctx.lineWidth = 1.2;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    if (!a || !b) {
-      continue;
+  paths.forEach((path, pi) => {
+    const parity = parities[pi] ?? [];
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i];
+      const b = path[i + 1];
+      if (!a || !b) {
+        continue;
+      }
+      ctx.strokeStyle = parity[i] === 1 ? ODD_COLOR : EVEN_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(projX(a.x), projY(a.y));
+      ctx.lineTo(projX(b.x), projY(b.y));
+      ctx.stroke();
     }
-    ctx.strokeStyle = parity[i] === 1 ? ODD_COLOR : EVEN_COLOR;
-    ctx.beginPath();
-    ctx.moveTo(projX(a.x), projY(a.y));
-    ctx.lineTo(projX(b.x), projY(b.y));
-    ctx.stroke();
-  }
+  });
   ctx.globalAlpha = 1;
 }
