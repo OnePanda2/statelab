@@ -32,29 +32,29 @@ export function FeatureAnalysis({ trajectory }: FeatureAnalysisProps): JSX.Eleme
         return (
           <div
             key={group}
-            className={`rounded-xl border border-slate-700/60 bg-slate-900/40 p-4 ${
+            className={`sl-panel ${
               wide ? 'md:col-span-2' : ''
             }`}
           >
-            <h3 className="mb-2 text-xs uppercase tracking-wide text-slate-400">{group}</h3>
-            <table className="w-full border-collapse">
+            <h3 className="mb-2 sl-label">{group}</h3>
+            <table className="sl-table">
               <tbody>
                 {items.map((m) => {
                   const value = metrics[m.key];
                   const supported = isSupported(value);
                   const na = isNotApplicable(value);
                   const valueClass = !supported
-                    ? 'italic text-slate-500'
+                    ? 'italic text-[color:var(--sl-text-tertiary)]'
                     : na
-                      ? 'text-slate-500'
-                      : 'text-slate-200';
+                      ? 'text-[color:var(--sl-text-tertiary)]'
+                      : 'text-[color:var(--sl-text)]';
                   return (
-                    <tr key={m.key} className="border-b border-slate-700/40 last:border-0">
-                      <td className="whitespace-nowrap py-1.5 pr-4 align-top text-slate-400">
+                    <tr key={m.key} className="">
+                      <td className="whitespace-nowrap py-2 pr-4 align-top text-[color:var(--sl-text-secondary)]">
                         {m.label}
                       </td>
                       <td
-                        className={`py-1.5 text-right align-top font-mono text-xs ${valueClass} ${
+                        className={`py-2 text-right align-top font-mono text-xs ${valueClass} ${
                           wide ? 'break-all text-left' : ''
                         }`}
                         data-metric={m.key}

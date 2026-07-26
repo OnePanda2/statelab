@@ -33,8 +33,8 @@ export interface CoralProps {
   height?: number;
 }
 
-const ODD_COLOR = '#f0883e'; // orange — segments following an odd-parity transition
-const EVEN_COLOR = '#3fb950'; // green — segments following an even-parity transition
+export const CORAL_ODD_COLOR = '#f0883e'; // orange — segments following an odd-parity transition
+export const CORAL_EVEN_COLOR = '#3fb950'; // green — segments following an even-parity transition
 
 /** Reads the pre-computed parity sequence off a Trajectory (never recomputed). */
 function readParity(trajectory: Trajectory): number[] | null {
@@ -102,7 +102,7 @@ export function Coral({
   if (trajectories.length === 0) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg bg-slate-950/50 text-slate-500"
+        className="sl-well flex items-center justify-center sl-hint"
         style={{ height }}
       >
         Run a trajectory to draw the coral.
@@ -113,7 +113,7 @@ export function Coral({
   if (parities.length === 0) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg bg-slate-950/50 text-slate-500"
+        className="sl-well flex items-center justify-center sl-hint"
         style={{ height }}
       >
         {METRIC_NOT_SUPPORTED}
@@ -125,7 +125,7 @@ export function Coral({
     <canvas
       ref={canvasRef}
       style={{ width: '100%', height, display: 'block' }}
-      className="rounded-lg bg-slate-950/50"
+      className="sl-canvas-el"
       role="img"
       aria-label={`Coral visualization of ${trajectories.length} trajector${
         trajectories.length === 1 ? 'y' : 'ies'
@@ -199,7 +199,7 @@ function drawCoral(
       if (!a || !b) {
         continue;
       }
-      ctx.strokeStyle = parity[i] === 1 ? ODD_COLOR : EVEN_COLOR;
+      ctx.strokeStyle = parity[i] === 1 ? CORAL_ODD_COLOR : CORAL_EVEN_COLOR;
       ctx.beginPath();
       ctx.moveTo(projX(a.x), projY(a.y));
       ctx.lineTo(projX(b.x), projY(b.y));

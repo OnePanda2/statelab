@@ -1,0 +1,600 @@
+/**
+ * StateLab Design System v2 — design tokens.
+ *
+ * THE single source of truth for every visual constant: colour, elevation,
+ * radius, spacing, typography and motion. Nothing in the app hardcodes a shadow,
+ * a hex value or a duration — components consume the semantic classes at the
+ * bottom of this file, which consume these variables.
+ *
+ * This is a PRESENTATION layer only. It changes no logic, no data flow and no
+ * component hierarchy.
+ *
+ * Theming works by swapping variable values on `:root[data-theme]`. Dark mode is
+ * a first-class design, not an inversion — every elevation layer is redesigned
+ * for dark surfaces, because a light-mode shadow recipe inverted on dark looks
+ * muddy (the highlight has to weaken and the shadow has to deepen).
+ */
+
+/* ============================================================================
+   LIGHT THEME (default)
+   ========================================================================= */
+:root,
+:root[data-theme='light'] {
+  /* -- Surfaces: each step is a distinct elevation layer ------------------ */
+  --sl-bg: #ececec;
+  --sl-surface: #f3f3f3;
+  --sl-raised: #f8f8f8;
+
+  /* -- Text -------------------------------------------------------------- */
+  --sl-text: #252525;
+  --sl-text-secondary: #707070;
+  --sl-text-tertiary: #9a9a9a;
+
+  /* -- Neumorphic lighting.
+        Light source sits top-left, so highlights go up-left and shadows
+        down-right. Both are soft and low-contrast: depth should read as a
+        gentle carve, never a drop shadow. ---------------------------------- */
+  --sl-light: #ffffff;
+  --sl-shadow: #c8c8c8;
+  --sl-shadow-strong: #b9b9b9;
+
+  /* -- Accent. Deliberately scarce: selection, graphs, active state, primary
+        action. Everything else stays monochrome. --------------------------- */
+  --sl-accent: #3d7dff;
+  --sl-accent-hover: #2f6ef0;
+  --sl-accent-soft: rgba(61, 125, 255, 0.12);
+  --sl-accent-contrast: #ffffff;
+
+  /* -- Status. Muted so they inform without shouting. --------------------- */
+  --sl-success: #2e9e5b;
+  --sl-warning: #c77b28;
+  --sl-danger: #cf4a44;
+  --sl-success-soft: rgba(46, 158, 91, 0.12);
+  --sl-warning-soft: rgba(199, 123, 40, 0.12);
+  --sl-danger-soft: rgba(207, 74, 68, 0.12);
+
+  /* -- Hairlines. Used only where separation is unavoidable (table rows);
+        surfaces themselves are defined by shadow, not by borders. ---------- */
+  --sl-hairline: rgba(0, 0, 0, 0.06);
+
+  /* -- The visualization "screen". Held constant across themes: the canvas
+        renderers are untouched by this redesign and are tuned for a dark
+        plot field, so the frame presents it as an instrument display. ------ */
+  --sl-canvas: #14161a;
+  --sl-canvas-inset-a: rgba(0, 0, 0, 0.30);
+  --sl-canvas-inset-b: rgba(255, 255, 255, 0.55);
+}
+
+/* ============================================================================
+   DARK THEME
+   ========================================================================= */
+:root[data-theme='dark'] {
+  --sl-bg: #2b2d31;
+  --sl-surface: #31343a;
+  --sl-raised: #383b42;
+
+  --sl-text: #f3f3f3;
+  --sl-text-secondary: #b0b0b0;
+  --sl-text-tertiary: #8b8f96;
+
+  /* On dark surfaces a white highlight reads as glare, so the "light" is a
+     lifted grey and the shadow goes near-black. This is the main reason dark
+     mode cannot be a colour inversion. */
+  --sl-light: #3f434b;
+  --sl-shadow: #212328;
+  --sl-shadow-strong: #191b1f;
+
+  --sl-accent: #5c92ff;
+  --sl-accent-hover: #7aa6ff;
+  --sl-accent-soft: rgba(92, 146, 255, 0.16);
+  --sl-accent-contrast: #10131a;
+
+  --sl-success: #4ec27b;
+  --sl-warning: #e0a052;
+  --sl-danger: #f0736c;
+  --sl-success-soft: rgba(78, 194, 123, 0.16);
+  --sl-warning-soft: rgba(224, 160, 82, 0.16);
+  --sl-danger-soft: rgba(240, 115, 108, 0.16);
+
+  --sl-hairline: rgba(255, 255, 255, 0.07);
+
+  --sl-canvas: #16181d;
+  --sl-canvas-inset-a: rgba(0, 0, 0, 0.55);
+  --sl-canvas-inset-b: rgba(255, 255, 255, 0.05);
+}
+
+/* ============================================================================
+   NON-COLOUR TOKENS — identical across themes
+   ========================================================================= */
+:root {
+  /* -- Elevation presets. Paired shadows only: one light, one dark. Blur is
+        kept modest and spread at 0 so these stay cheap to composite. ------- */
+  --sl-elev-raised:
+    6px 6px 14px var(--sl-shadow),
+    -6px -6px 14px var(--sl-light);
+  --sl-elev-raised-sm:
+    3px 3px 7px var(--sl-shadow),
+    -3px -3px 7px var(--sl-light);
+  --sl-elev-raised-lg:
+    10px 10px 26px var(--sl-shadow),
+    -10px -10px 26px var(--sl-light);
+  --sl-elev-inset:
+    inset 3px 3px 7px var(--sl-shadow),
+    inset -3px -3px 7px var(--sl-light);
+  --sl-elev-inset-deep:
+    inset 5px 5px 11px var(--sl-shadow-strong),
+    inset -5px -5px 11px var(--sl-light);
+  --sl-elev-flat: 0 0 0 rgba(0, 0, 0, 0);
+
+  /* -- Corner radius ------------------------------------------------------ */
+  /* Micro-controls (checkbox, swatch) sit below the 12px control step: on a
+     16px box, 12px would read as a circle. 6px keeps the same corner-to-size
+     proportion the 12px radius gives a 32px control. */
+  --sl-radius-micro: 6px;
+  --sl-radius-control: 12px;
+  --sl-radius-card: 18px;
+  --sl-radius-panel: 20px;
+  --sl-radius-dialog: 24px;
+  --sl-radius-pill: 999px;
+
+  /* -- Spacing: strict 8-point scale -------------------------------------- */
+  --sl-space-1: 8px;
+  --sl-space-2: 16px;
+  --sl-space-3: 24px;
+  --sl-space-4: 32px;
+  --sl-space-5: 40px;
+  --sl-space-6: 48px;
+
+  /* -- Typography --------------------------------------------------------- */
+  --sl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+    'IBM Plex Sans', 'Segoe UI', Roboto, sans-serif;
+  --sl-font-mono: 'SF Mono', 'IBM Plex Mono', 'JetBrains Mono', Consolas,
+    'Courier New', monospace;
+
+  --sl-text-xs: 11px;
+  --sl-text-sm: 13px;
+  --sl-text-base: 14px;
+  --sl-text-lg: 17px;
+  --sl-text-xl: 21px;
+  --sl-text-2xl: 26px;
+
+  --sl-tracking-label: 0.06em;
+
+  /* -- Motion. Short and unexaggerated; no bounce, no scale. -------------- */
+  --sl-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --sl-dur-hover: 150ms;
+  --sl-dur-press: 120ms;
+  --sl-dur-expand: 200ms;
+  --sl-dur-theme: 200ms;
+}
+
+/* ============================================================================
+   BASE
+   ========================================================================= */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--sl-bg);
+  color: var(--sl-text);
+  font-family: var(--sl-font);
+  font-size: var(--sl-text-base);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Only colours animate on a theme switch. Animating shadow/layout here would
+   make every hover feel laggy, so transitions live on the components. */
+body,
+.sl-surface,
+.sl-card,
+.sl-panel,
+.sl-btn,
+.sl-input,
+.sl-select {
+  transition:
+    background-color var(--sl-dur-theme) var(--sl-ease),
+    color var(--sl-dur-theme) var(--sl-ease),
+    box-shadow var(--sl-dur-theme) var(--sl-ease);
+}
+
+/* Respect the OS setting. Neumorphism leans on motion and soft depth; users who
+   ask for less motion get none. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Focus is never removed — only restyled. Keyboard navigation must survive a
+   visual redesign (accessibility requirement). */
+:where(button, input, select, textarea, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--sl-accent);
+  outline-offset: 2px;
+  border-radius: var(--sl-radius-control);
+}
+
+/* ============================================================================
+   SEMANTIC COMPONENT CLASSES
+   Components use these instead of scattering utilities, so the design language
+   can be adjusted in one place.
+   ========================================================================= */
+/* Plain classes rather than `@layer components`: this file is imported ahead of
+   the Tailwind directives, so it needs no Tailwind layer machinery, and keeping
+   it layer-free means Tailwind utilities still override for one-off cases. */
+
+  /* -- Surfaces ---------------------------------------------------------- */
+  .sl-panel {
+    background: var(--sl-surface);
+    border-radius: var(--sl-radius-panel);
+    box-shadow: var(--sl-elev-raised);
+    padding: var(--sl-space-3);
+  }
+
+  .sl-card {
+    background: var(--sl-raised);
+    border-radius: var(--sl-radius-card);
+    box-shadow: var(--sl-elev-raised-sm);
+    padding: var(--sl-space-3);
+  }
+
+  .sl-well {
+    background: var(--sl-surface);
+    border-radius: var(--sl-radius-card);
+    box-shadow: var(--sl-elev-inset);
+  }
+
+  /* The visualization frame: content sits in a recessed screen so the plot
+     reads as the centrepiece and the chrome recedes. */
+  .sl-screen {
+    background: var(--sl-canvas);
+    border-radius: var(--sl-radius-card);
+    box-shadow:
+      inset 4px 4px 10px var(--sl-canvas-inset-a),
+      0 1px 0 var(--sl-canvas-inset-b);
+    padding: var(--sl-space-2);
+  }
+
+  /* Applied directly to a <canvas>. Same recessed "instrument screen" as
+     .sl-screen but with no padding, since a canvas sizes itself. */
+  .sl-canvas-el {
+    background: var(--sl-canvas);
+    border-radius: var(--sl-radius-card);
+    box-shadow:
+      inset 4px 4px 10px var(--sl-canvas-inset-a),
+      0 1px 0 var(--sl-canvas-inset-b);
+  }
+
+  /* -- Toolbar ----------------------------------------------------------- */
+  .sl-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--sl-space-2);
+    background: var(--sl-surface);
+    border-radius: var(--sl-radius-panel);
+    box-shadow: var(--sl-elev-raised);
+    padding: var(--sl-space-2) var(--sl-space-3);
+  }
+
+  /* -- Buttons ----------------------------------------------------------- */
+  .sl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sl-space-1);
+    min-height: 38px;
+    padding: 0 var(--sl-space-2);
+    border: none;
+    border-radius: var(--sl-radius-control);
+    background: var(--sl-raised);
+    color: var(--sl-text);
+    font-family: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--sl-elev-raised-sm);
+    transition:
+      box-shadow var(--sl-dur-hover) var(--sl-ease),
+      color var(--sl-dur-hover) var(--sl-ease),
+      background-color var(--sl-dur-hover) var(--sl-ease);
+  }
+  .sl-btn:hover:not(:disabled) {
+    color: var(--sl-accent);
+  }
+  /* Pressed = carved in. This is the core neumorphic affordance. */
+  .sl-btn:active:not(:disabled) {
+    box-shadow: var(--sl-elev-inset);
+    transition-duration: var(--sl-dur-press);
+  }
+  .sl-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .sl-btn--primary {
+    background: var(--sl-accent);
+    color: var(--sl-accent-contrast);
+    font-weight: 600;
+  }
+  .sl-btn--primary:hover:not(:disabled) {
+    background: var(--sl-accent-hover);
+    color: var(--sl-accent-contrast);
+  }
+
+  .sl-btn--icon {
+    min-width: 38px;
+    padding: 0;
+  }
+
+  /* Toggle-style buttons (overlay modes, segmented controls). */
+  .sl-btn--toggle[data-active='true'] {
+    box-shadow: var(--sl-elev-inset);
+    color: var(--sl-accent);
+    background: var(--sl-accent-soft);
+  }
+
+  /* -- Inputs ------------------------------------------------------------ */
+  .sl-input,
+  .sl-select {
+    min-height: 38px;
+    padding: 0 var(--sl-space-2);
+    border: none;
+    border-radius: var(--sl-radius-control);
+    background: var(--sl-surface);
+    color: var(--sl-text);
+    font-family: inherit;
+    font-size: var(--sl-text-sm);
+    box-shadow: var(--sl-elev-inset);
+    transition: box-shadow var(--sl-dur-hover) var(--sl-ease);
+  }
+  .sl-input:focus,
+  .sl-select:focus {
+    outline: none;
+    box-shadow:
+      var(--sl-elev-inset),
+      0 0 0 2px var(--sl-accent-soft);
+  }
+  .sl-input::placeholder {
+    color: var(--sl-text-tertiary);
+  }
+  .sl-input--mono {
+    font-family: var(--sl-font-mono);
+  }
+
+  .sl-select {
+    appearance: none;
+    padding-right: var(--sl-space-4);
+    cursor: pointer;
+    /* Chevron drawn as a background gradient — no extra DOM, no icon asset. */
+    background-image:
+      linear-gradient(45deg, transparent 50%, currentColor 50%),
+      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position:
+      calc(100% - 18px) 55%,
+      calc(100% - 13px) 55%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  /* -- Labels ------------------------------------------------------------ */
+  .sl-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sl-space-1);
+  }
+
+  .sl-label {
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    letter-spacing: var(--sl-tracking-label);
+    text-transform: uppercase;
+    color: var(--sl-text-secondary);
+  }
+
+  .sl-label__value {
+    color: var(--sl-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* -- Sliders ----------------------------------------------------------- */
+  .sl-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 132px;
+    height: 20px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .sl-slider::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: var(--sl-radius-pill);
+    background: var(--sl-surface);
+    box-shadow: var(--sl-elev-inset);
+  }
+  .sl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -4px;
+    border-radius: var(--sl-radius-pill);
+    background: var(--sl-accent);
+    box-shadow: var(--sl-elev-raised-sm);
+    transition: transform var(--sl-dur-hover) var(--sl-ease);
+  }
+  .sl-slider::-moz-range-track {
+    height: 8px;
+    border-radius: var(--sl-radius-pill);
+    background: var(--sl-surface);
+    box-shadow: var(--sl-elev-inset);
+  }
+  .sl-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: var(--sl-radius-pill);
+    background: var(--sl-accent);
+    box-shadow: var(--sl-elev-raised-sm);
+  }
+
+  /* -- Checkbox ---------------------------------------------------------- */
+  .sl-checkbox {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: var(--sl-radius-micro);
+    background: var(--sl-surface);
+    box-shadow: var(--sl-elev-inset);
+    cursor: pointer;
+    transition: background-color var(--sl-dur-hover) var(--sl-ease);
+  }
+  .sl-checkbox:checked {
+    background: var(--sl-accent);
+    box-shadow: var(--sl-elev-raised-sm);
+  }
+
+  /* -- Colour swatch input ----------------------------------------------- */
+  .sl-color {
+    width: 46px;
+    height: 34px;
+    padding: 3px;
+    border: none;
+    border-radius: var(--sl-radius-control);
+    background: var(--sl-surface);
+    box-shadow: var(--sl-elev-inset);
+    cursor: pointer;
+  }
+
+  /* -- Status pills ------------------------------------------------------ */
+  .sl-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    border-radius: var(--sl-radius-pill);
+    font-size: var(--sl-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .sl-pill--neutral {
+    background: var(--sl-surface);
+    color: var(--sl-text-secondary);
+    box-shadow: var(--sl-elev-inset);
+  }
+  .sl-pill--success {
+    background: var(--sl-success-soft);
+    color: var(--sl-success);
+  }
+  .sl-pill--warning {
+    background: var(--sl-warning-soft);
+    color: var(--sl-warning);
+  }
+  .sl-pill--accent {
+    background: var(--sl-accent-soft);
+    color: var(--sl-accent);
+  }
+  .sl-pill--danger {
+    background: var(--sl-danger-soft);
+    color: var(--sl-danger);
+  }
+
+  /* -- Stats ------------------------------------------------------------- */
+  .sl-stat__label {
+    font-size: var(--sl-text-xs);
+    letter-spacing: var(--sl-tracking-label);
+    text-transform: uppercase;
+    color: var(--sl-text-secondary);
+  }
+  .sl-stat__value {
+    font-size: var(--sl-text-lg);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--sl-text);
+  }
+
+  /* -- Tables ------------------------------------------------------------ */
+  .sl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--sl-text-sm);
+  }
+  .sl-table th {
+    padding: var(--sl-space-1) var(--sl-space-2);
+    text-align: left;
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    letter-spacing: var(--sl-tracking-label);
+    text-transform: uppercase;
+    color: var(--sl-text-secondary);
+  }
+  .sl-table td {
+    padding: var(--sl-space-1) var(--sl-space-2);
+    border-top: 1px solid var(--sl-hairline);
+    color: var(--sl-text);
+  }
+  .sl-table tbody tr:first-child td {
+    border-top: none;
+  }
+  .sl-table--mono td {
+    font-family: var(--sl-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* -- Section heading --------------------------------------------------- */
+  .sl-section-title {
+    font-size: var(--sl-text-xs);
+    font-weight: 600;
+    letter-spacing: var(--sl-tracking-label);
+    text-transform: uppercase;
+    color: var(--sl-text-secondary);
+    margin-bottom: var(--sl-space-2);
+  }
+
+  /* -- Code / JSON ------------------------------------------------------- */
+  .sl-code {
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-xs);
+    line-height: 1.7;
+    color: var(--sl-text-secondary);
+    background: var(--sl-surface);
+    border-radius: var(--sl-radius-card);
+    box-shadow: var(--sl-elev-inset);
+    padding: var(--sl-space-2);
+    overflow: auto;
+  }
+
+  /* -- Helper text ------------------------------------------------------- */
+  .sl-hint {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-text-tertiary);
+    line-height: 1.6;
+  }
+
+  .sl-error {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-danger);
+  }
+
+  /* -- Scrollbars -------------------------------------------------------- */
+  .sl-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .sl-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sl-scroll::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: var(--sl-radius-pill);
+    background-clip: content-box;
+    background-color: var(--sl-text-tertiary);
+    opacity: 0.5;
+  }

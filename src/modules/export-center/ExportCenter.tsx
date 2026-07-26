@@ -100,8 +100,8 @@ export function ExportCenter({ trajectory }: ExportCenterProps): JSX.Element {
   }
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="sl-panel">
+      <div className="flex flex-wrap items-center gap-4">
         <button className={BTN} onClick={exportPng} data-export="png">
           PNG
         </button>
@@ -114,18 +114,18 @@ export function ExportCenter({ trajectory }: ExportCenterProps): JSX.Element {
         <button className={BTN} onClick={exportJson} data-export="json">
           JSON
         </button>
-        <label className="flex items-center gap-2 text-xs text-slate-400">
+        <label className="flex items-center gap-2 text-xs text-[color:var(--sl-text-secondary)]">
           <input
             type="checkbox"
-            className="accent-sky-500"
+            className="sl-checkbox"
             checked={logScale}
             onChange={(e) => setLogScale(e.target.checked)}
           />
           Log scale (PNG / SVG)
         </label>
-        {status && <span className="text-xs text-emerald-400">{status}</span>}
+        {status && <span className="text-xs text-[color:var(--sl-success)]">{status}</span>}
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-4 sl-hint">
         Every export embeds the full metadata block: app / engine / schema / visualization versions,
         iteration limit, cycle detection, dataset definition, rendering parameters, timestamp, and
         platform.
@@ -134,8 +134,7 @@ export function ExportCenter({ trajectory }: ExportCenterProps): JSX.Element {
   );
 }
 
-const BTN =
-  'rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-700';
+const BTN = 'sl-btn';
 
 function downloadText(content: string, filename: string, mime: string): void {
   downloadBlob(new Blob([content], { type: mime }), filename);

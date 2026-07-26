@@ -195,11 +195,11 @@ export function DatasetExplorer(): JSX.Element {
   const showCount = generator === 'primes' || generator === 'powers-of-two' || generator === 'random';
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
-      <div className="mb-3 flex flex-wrap items-end gap-x-4 gap-y-3">
+    <div className="sl-panel">
+      <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-4">
         <Field label="Generator">
           <select
-            className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm outline-none focus:border-sky-500"
+            className="sl-select"
             value={generator}
             onChange={(e) => setGenerator(e.target.value as DatasetGenerator)}
             disabled={running}
@@ -230,7 +230,7 @@ export function DatasetExplorer(): JSX.Element {
         {generator === 'csv' && (
           <Field label="Values (comma / space / newline separated)">
             <input
-              className="w-80 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 font-mono text-sm outline-none focus:border-sky-500"
+              className="w-80 sl-input sl-input--mono"
               value={csv}
               onChange={(e) => setCsv(e.target.value)}
               disabled={running}
@@ -246,7 +246,7 @@ export function DatasetExplorer(): JSX.Element {
 
         {running ? (
           <button
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium hover:bg-slate-800"
+            className="sl-btn"
             onClick={stop_}
           >
             Stop
@@ -254,13 +254,13 @@ export function DatasetExplorer(): JSX.Element {
         ) : (
           <>
             <button
-              className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:brightness-110"
+              className="sl-btn sl-btn--primary"
               onClick={() => void start_()}
             >
               Run dataset
             </button>
             <button
-              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-700"
+              className="sl-btn"
               onClick={() => void exportCsv()}
               data-export="dataset-csv"
             >
@@ -270,12 +270,12 @@ export function DatasetExplorer(): JSX.Element {
         )}
       </div>
 
-      {error && <p className="mb-3 text-red-400">Dataset failed: {error}</p>}
+      {error && <p className="sl-error mb-4">Dataset failed: {error}</p>}
 
-      <div className="mb-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+      <div className="mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
         <Stat label="Processed">
           {aggregate.count.toLocaleString()}
-          {running && <span className="ml-1 animate-pulse text-slate-500">…</span>}
+          {running && <span className="ml-1 animate-pulse text-[color:var(--sl-text-tertiary)]">…</span>}
         </Stat>
         <Stat label="Converged">{aggregate.converged.toLocaleString()}</Stat>
         <Stat label="Cycle">{aggregate.cycleDetected.toLocaleString()}</Stat>
@@ -285,15 +285,15 @@ export function DatasetExplorer(): JSX.Element {
         <Stat label="Max iters">
           {aggregate.maxIterations.toLocaleString()}
           {aggregate.longestInitialState && (
-            <span className="ml-1 text-xs text-slate-500">@ {truncate(aggregate.longestInitialState)}</span>
+            <span className="ml-1 sl-hint">@ {truncate(aggregate.longestInitialState)}</span>
           )}
         </Stat>
         <Stat label="Largest peak">{truncate(aggregate.largestPeak)}</Stat>
       </div>
 
-      <div className="max-h-80 overflow-auto rounded-lg border border-slate-700/50">
-        <table className="w-full border-collapse text-xs">
-          <thead className="sticky top-0 bg-slate-900 text-slate-400">
+      <div className="sl-well sl-scroll max-h-80 overflow-auto">
+        <table className="sl-table sl-table--mono">
+          <thead className="sticky top-0 text-[color:var(--sl-text-secondary)]">
             <tr>
               <Th>Initial</Th>
               <Th>Iterations</Th>
@@ -304,7 +304,7 @@ export function DatasetExplorer(): JSX.Element {
           </thead>
           <tbody className="font-mono">
             {rows.map((r, i) => (
-              <tr key={`${r.initial_state}-${i}`} className="border-t border-slate-800">
+              <tr key={`${r.initial_state}-${i}`} className="">
                 <Td>{truncate(r.initial_state)}</Td>
                 <Td>{r.iteration_count}</Td>
                 <Td>{r.status}</Td>
@@ -315,7 +315,7 @@ export function DatasetExplorer(): JSX.Element {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-4 sl-hint">
         Streaming: each trajectory is summarized and released — the full set is never held in memory.
         Showing the first {ROW_WINDOW} rows; aggregates cover every processed item.
       </p>
@@ -329,8 +329,8 @@ function truncate(s: string): string {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-slate-400">{label}</span>
+    <label className="sl-field">
+      <span className="sl-label">{label}</span>
       {children}
     </label>
   );
@@ -350,7 +350,7 @@ function NumberField({
   return (
     <Field label={label}>
       <input
-        className="w-24 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 font-mono text-sm outline-none focus:border-sky-500"
+        className="w-24 sl-input sl-input--mono"
         value={value}
         inputMode="numeric"
         onChange={(e) => onChange(e.target.value)}
@@ -363,16 +363,16 @@ function NumberField({
 function Stat({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
     <div>
-      <div className="text-xs text-slate-400">{label}</div>
+      <div className="text-xs text-[color:var(--sl-text-secondary)]">{label}</div>
       <div className="font-semibold tabular-nums">{children}</div>
     </div>
   );
 }
 
 function Th({ children }: { children: React.ReactNode }): JSX.Element {
-  return <th className="px-2 py-1.5 text-left font-medium">{children}</th>;
+  return <th className="px-4 py-2.5 text-left font-medium">{children}</th>;
 }
 
 function Td({ children }: { children: React.ReactNode }): JSX.Element {
-  return <td className="px-2 py-1 text-slate-300">{children}</td>;
+  return <td className="px-4 py-2 text-[color:var(--sl-text)]">{children}</td>;
 }

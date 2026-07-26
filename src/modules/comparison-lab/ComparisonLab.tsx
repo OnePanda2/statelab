@@ -69,12 +69,12 @@ export function ComparisonLab(): JSX.Element {
   const displayVectors = featureNorm ? normalized : vectors;
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
-      <div className="mb-3 flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Add trajectory (n)</span>
+    <div className="sl-panel">
+      <div className="mb-4 flex flex-wrap items-end gap-4">
+        <label className="sl-field">
+          <span className="sl-label">Add trajectory (n)</span>
           <input
-            className="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 font-mono text-sm outline-none focus:border-sky-500"
+            className="w-40 sl-input sl-input--mono"
             value={value}
             inputMode="numeric"
             spellCheck={false}
@@ -85,7 +85,7 @@ export function ComparisonLab(): JSX.Element {
           />
         </label>
         <button
-          className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:brightness-110 disabled:opacity-60"
+          className="sl-btn sl-btn--primary"
           onClick={() => void add()}
           disabled={busy}
         >
@@ -93,14 +93,11 @@ export function ComparisonLab(): JSX.Element {
         </button>
         <div className="flex flex-wrap gap-2">
           {entries.map((e) => (
-            <span
-              key={e.trajectory.initial_state}
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs"
-            >
+            <span key={e.trajectory.initial_state} className="sl-pill sl-pill--neutral">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: e.color }} />
               n={e.trajectory.initial_state}
               <button
-                className="ml-1 text-slate-500 hover:text-slate-200"
+                className="ml-1 text-[color:var(--sl-text-tertiary)] hover:text-[color:var(--sl-danger)]"
                 onClick={() => remove(e.trajectory.initial_state)}
                 aria-label={`remove ${e.trajectory.initial_state}`}
               >
@@ -111,21 +108,20 @@ export function ComparisonLab(): JSX.Element {
         </div>
       </div>
 
-      {error && <p className="mb-3 text-red-400">Failed: {error}</p>}
+      {error && <p className="sl-error mb-4">Failed: {error}</p>}
 
       {entries.length === 0 ? (
-        <p className="text-sm text-slate-500">Add two or more trajectories to compare them.</p>
+        <p className="text-sm text-[color:var(--sl-text-tertiary)]">Add two or more trajectories to compare them.</p>
       ) : (
         <>
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-slate-400">Overlay</span>
-            <div className="inline-flex overflow-hidden rounded-lg border border-slate-700">
+            <span className="sl-label">Overlay</span>
+            <div className="inline-flex gap-2">
               {MODES.map((m) => (
                 <button
                   key={m.value}
-                  className={`px-3 py-1 text-xs ${
-                    mode === m.value ? 'bg-sky-500 text-slate-950' : 'bg-slate-800 text-slate-300'
-                  }`}
+                  className="sl-btn sl-btn--toggle"
+                  data-active={mode === m.value}
                   onClick={() => setMode(m.value)}
                 >
                   {m.label}
@@ -165,21 +161,21 @@ function FeatureTable({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs uppercase tracking-wide text-slate-400">Feature comparison</h3>
+        <h3 className="sl-label">Feature comparison</h3>
         <button
-          className="rounded-lg border border-slate-700 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-800"
+          className="sl-btn"
           onClick={onToggle}
         >
           {normalized ? 'Min-max normalized' : 'Raw values'}
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead className="text-slate-400">
+        <table className="sl-table sl-table--mono">
+          <thead className="text-[color:var(--sl-text-secondary)]">
             <tr>
-              <th className="px-2 py-1 text-left font-medium">Feature</th>
+              <th className="px-4 py-2 text-left font-medium">Feature</th>
               {entries.map((e) => (
-                <th key={e.trajectory.initial_state} className="px-2 py-1 text-right font-medium">
+                <th key={e.trajectory.initial_state} className="px-4 py-2 text-right font-medium">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: e.color }} /> n=
                   {e.trajectory.initial_state}
                 </th>
@@ -188,10 +184,10 @@ function FeatureTable({
           </thead>
           <tbody className="font-mono">
             {COMPARISON_FEATURES.map((f, fi) => (
-              <tr key={f.key} className="border-t border-slate-800">
-                <td className="px-2 py-1 text-slate-400">{f.label}</td>
+              <tr key={f.key} className="">
+                <td className="px-4 py-2 text-[color:var(--sl-text-secondary)]">{f.label}</td>
                 {vectors.map((v, ci) => (
-                  <td key={ci} className="px-2 py-1 text-right text-slate-200">
+                  <td key={ci} className="px-4 py-2 text-right text-[color:var(--sl-text)]">
                     {formatNumber(v[fi] ?? 0)}
                   </td>
                 ))}
@@ -213,16 +209,16 @@ function SimilarityMatrix({
 }): JSX.Element {
   return (
     <div>
-      <h3 className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-        Cosine similarity <span className="text-slate-500">(raw feature vectors)</span>
+      <h3 className="mb-2 sl-label">
+        Cosine similarity <span className="text-[color:var(--sl-text-tertiary)]">(raw feature vectors)</span>
       </h3>
       <div className="overflow-x-auto">
         <table className="border-collapse text-xs">
-          <thead className="text-slate-400">
+          <thead className="text-[color:var(--sl-text-secondary)]">
             <tr>
-              <th className="px-2 py-1" />
+              <th className="px-4 py-2" />
               {entries.map((e) => (
-                <th key={e.trajectory.initial_state} className="px-2 py-1 font-medium">
+                <th key={e.trajectory.initial_state} className="px-4 py-2 font-medium">
                   {e.trajectory.initial_state}
                 </th>
               ))}
@@ -231,13 +227,13 @@ function SimilarityMatrix({
           <tbody className="font-mono">
             {entries.map((rowEntry, r) => (
               <tr key={rowEntry.trajectory.initial_state}>
-                <td className="px-2 py-1 text-slate-400">{rowEntry.trajectory.initial_state}</td>
+                <td className="px-4 py-2 text-[color:var(--sl-text-secondary)]">{rowEntry.trajectory.initial_state}</td>
                 {entries.map((_, c) => {
                   const sim = matrix[r]?.[c] ?? 0;
                   return (
                     <td
                       key={c}
-                      className="px-2 py-1 text-center text-slate-100"
+                      className="px-4 py-2 text-center text-[color:var(--sl-text)]"
                       style={{ background: `rgba(88,166,255,${Math.max(0, sim).toFixed(3)})` }}
                     >
                       {sim.toFixed(3)}

@@ -10,6 +10,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ResearchController } from '@/controllers/ResearchController';
 import { listSystems, type SystemDescriptor } from '@/lib/invoke';
+import { useTheme } from '@/lib/theme';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import type { Trajectory } from '@/types/trajectory';
 import { ValueChart } from '@/visualizations/value-chart/ValueChart';
 import { LogChart } from '@/visualizations/log-chart/LogChart';
@@ -19,16 +21,18 @@ import { DatasetExplorer } from '@/modules/dataset-explorer/DatasetExplorer';
 import { ComparisonLab } from '@/modules/comparison-lab/ComparisonLab';
 import { ExportCenter } from '@/modules/export-center/ExportCenter';
 
-const STATUS_STYLES: Record<string, string> = {
-  Converged: 'bg-emerald-500/15 text-emerald-400',
-  CycleDetected: 'bg-orange-500/15 text-orange-400',
-  IterationLimitReached: 'bg-sky-500/15 text-sky-400',
-  SystemError: 'bg-red-500/15 text-red-400',
+/** Terminal status → design-system pill variant. */
+const STATUS_PILL: Record<string, string> = {
+  Converged: 'sl-pill sl-pill--success',
+  CycleDetected: 'sl-pill sl-pill--warning',
+  IterationLimitReached: 'sl-pill sl-pill--accent',
+  SystemError: 'sl-pill sl-pill--danger',
 };
 
 export default function App(): JSX.Element {
   // One controller per session — the only layer allowed to trigger computation.
   const controller = useMemo(() => new ResearchController(), []);
+  const { theme, toggleTheme } = useTheme();
   const [value, setValue] = useState('27');
   const [trajectory, setTrajectory] = useState<Trajectory | null>(null);
   // Every trajectory run this session, for the Coral overlay. Charts, metrics and
@@ -99,20 +103,25 @@ export default function App(): JSX.Element {
   }
 
   return (
-    <div className="min-h-screen bg-[#0e1116] text-slate-100">
-      <header className="flex items-baseline gap-3 border-b border-slate-700/60 px-6 py-4">
-        <h1 className="text-xl font-semibold tracking-wide">StateLab</h1>
-        <span className="text-sm text-slate-400">
-          deterministic state-evolution research platform · classic-collatz
-        </span>
-      </header>
+    <div className="min-h-screen">
+      <main className="mx-auto max-w-5xl px-8 py-10">
+        {/* Toolbar: floats above the workspace, holds identity, the run
+            controls' context and the theme toggle. Deliberately sparse. */}
+        <header className="sl-toolbar mb-8">
+          <h1 className="text-[length:var(--sl-text-xl)] font-semibold tracking-tight">StateLab</h1>
+          <span className="sl-pill sl-pill--neutral">{systemId}</span>
+          <span className="flex-1" />
+          <span className="sl-hint hidden md:inline">
+            deterministic state-evolution research platform
+          </span>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-6">
-        <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs uppercase tracking-wide text-slate-400">System</span>
+        <div className="sl-panel mb-8 flex flex-wrap items-end gap-4">
+          <label className="sl-field">
+            <span className="sl-label">System</span>
             <select
-              className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm outline-none focus:border-sky-500"
+              className="sl-select"
               value={systemId}
               onChange={(e) => setSystemId(e.target.value)}
               data-testid="system-select"
@@ -124,10 +133,10 @@ export default function App(): JSX.Element {
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs uppercase tracking-wide text-slate-400">Initial state (n)</span>
+          <label className="sl-field">
+            <span className="sl-label">Initial state (n)</span>
             <input
-              className="w-64 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-base outline-none focus:border-sky-500"
+              className="sl-input sl-input--mono w-64"
               value={value}
               spellCheck={false}
               inputMode="numeric"
@@ -137,29 +146,21 @@ export default function App(): JSX.Element {
               }}
             />
           </label>
-          <button
-            className="rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 hover:brightness-110 disabled:opacity-60"
-            onClick={() => void run()}
-            disabled={busy}
-          >
+          <button className="sl-btn sl-btn--primary" onClick={() => void run()} disabled={busy}>
             {busy ? 'Running…' : 'Run trajectory'}
           </button>
-          <span className="text-xs text-slate-400">
+          <span className="sl-hint max-w-[15rem]">
             Arbitrary precision — all mathematics runs in the Rust engine.
           </span>
         </div>
 
-        {error && <p className="mb-4 text-red-400">Request failed: {error}</p>}
+        {error && <p className="sl-error mb-6">Request failed: {error}</p>}
 
         {trajectory && (
-          <section className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
-            <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <section className="sl-panel">
+            <div className="mb-6 flex flex-wrap items-center gap-x-10 gap-y-4">
               <Stat label="Status">
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    STATUS_STYLES[trajectory.trajectory_status] ?? 'bg-slate-600/30 text-slate-200'
-                  }`}
-                >
+                <span className={STATUS_PILL[trajectory.trajectory_status] ?? 'sl-pill sl-pill--neutral'}>
                   {trajectory.trajectory_status}
                 </span>
               </Stat>
@@ -170,22 +171,18 @@ export default function App(): JSX.Element {
               <Stat label="Reason">{trajectory.termination_reason}</Stat>
             </div>
 
-            <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
               <ValueChart trajectory={trajectory} />
               <LogChart trajectory={trajectory} />
             </div>
 
-            <h2 className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-              Feature analysis
-            </h2>
-            <div className="mb-4">
+            <h2 className="sl-section-title">Feature analysis</h2>
+            <div className="mb-8">
               <FeatureAnalysis trajectory={trajectory} />
             </div>
 
-            <h2 className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-              Coral / branch visualization
-            </h2>
-            <div className="mb-4">
+            <h2 className="sl-section-title">Coral / branch visualization</h2>
+            <div className="mb-8">
               <CoralPanel
                 trajectories={coralTrajectories}
                 onReset={() => {
@@ -198,29 +195,29 @@ export default function App(): JSX.Element {
               />
             </div>
 
-            <h2 className="mb-2 text-xs uppercase tracking-wide text-slate-400">Export center</h2>
-            <div className="mb-4">
+            <h2 className="sl-section-title">Export center</h2>
+            <div className="mb-8">
               <ExportCenter trajectory={trajectory} />
             </div>
 
             <details>
-              <summary className="cursor-pointer text-xs uppercase tracking-wide text-slate-400">
+              <summary className="sl-section-title mb-0 cursor-pointer select-none">
                 Trajectory Object (raw JSON)
               </summary>
-              <pre className="mt-2 max-h-[28rem] overflow-auto rounded-lg bg-slate-950/70 p-3 font-mono text-xs leading-relaxed text-slate-200">
+              <pre className="sl-code sl-scroll mt-4 max-h-[28rem]">
                 {JSON.stringify(trajectory, null, 2)}
               </pre>
             </details>
           </section>
         )}
 
-        <section className="mt-8">
-          <h2 className="mb-2 text-xs uppercase tracking-wide text-slate-400">Comparison lab</h2>
+        <section className="mt-10">
+          <h2 className="sl-section-title">Comparison lab</h2>
           <ComparisonLab />
         </section>
 
-        <section className="mt-8">
-          <h2 className="mb-2 text-xs uppercase tracking-wide text-slate-400">Dataset explorer</h2>
+        <section className="mt-10">
+          <h2 className="sl-section-title">Dataset explorer</h2>
           <DatasetExplorer />
         </section>
       </main>
@@ -231,8 +228,8 @@ export default function App(): JSX.Element {
 function Stat({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
     <div>
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className="text-lg font-bold tabular-nums">{children}</div>
+      <div className="sl-stat__label">{label}</div>
+      <div className="sl-stat__value">{children}</div>
     </div>
   );
 }

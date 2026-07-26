@@ -71,7 +71,7 @@ export function OverlayChart({ series, mode, height = 300 }: OverlayChartProps):
     <canvas
       ref={canvasRef}
       style={{ width: '100%', height, display: 'block' }}
-      className="rounded-lg bg-slate-950/50"
+      className="sl-canvas-el"
       role="img"
       aria-label={`Overlay comparison chart (${mode} mode) of ${series.length} trajectories`}
     />

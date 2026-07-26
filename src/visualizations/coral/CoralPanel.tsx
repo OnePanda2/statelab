@@ -15,7 +15,7 @@
 
 import { useMemo, useState } from 'react';
 import type { Trajectory } from '@/types/trajectory';
-import { Coral } from './Coral';
+import { Coral, CORAL_EVEN_COLOR, CORAL_ODD_COLOR } from './Coral';
 import { DIRECTION_RULES, type CoralParams, type DirectionRule } from './coralPath';
 
 export interface CoralPanelProps {
@@ -97,7 +97,7 @@ export function CoralPanel({
 
   return (
     <section>
-      <div className="mb-3 flex flex-wrap items-end gap-x-5 gap-y-3">
+      <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-4">
         {/* Half-degree steps: the tree's straightness is sensitive to the odd/even
             balance, and whole degrees are too coarse to tune it. */}
         <Slider label="Odd angle" value={oddAngle} min={-180} max={180} step={0.5} suffix="°" onChange={setOddAngle} />
@@ -106,10 +106,10 @@ export function CoralPanel({
         <Slider label="Opacity" value={opacity} min={0.05} max={1} step={0.05} onChange={setOpacity} />
         <Slider label="Scale" value={scale} min={0.2} max={4} step={0.1} suffix="×" onChange={setScale} />
         <Slider label="Rotation" value={rotation} min={-180} max={180} step={1} suffix="°" onChange={setRotation} />
-        <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Direction rule</span>
+        <label className="sl-field">
+          <span className="sl-label">Direction rule</span>
           <select
-            className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm outline-none focus:border-sky-500"
+            className="sl-select"
             value={rule}
             onChange={(e) => changeRule(e.target.value as DirectionRule)}
           >
@@ -122,15 +122,15 @@ export function CoralPanel({
         </label>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-slate-700/50 bg-slate-900/30 p-3">
-        <span className="text-xs uppercase tracking-wide text-slate-400">Overlay</span>
-        <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-200">
+      <div className="mb-4 flex flex-wrap items-end gap-4 sl-card">
+        <span className="sl-label">Overlay</span>
+        <span className="sl-pill sl-pill--neutral">
           {trajectories.length} trajector{trajectories.length === 1 ? 'y' : 'ies'}
         </span>
         <NumberField label="From" value={bulkFrom} onChange={setBulkFrom} disabled={progress !== null} />
         <NumberField label="To" value={bulkTo} onChange={setBulkTo} disabled={progress !== null} />
         <button
-          className="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:brightness-110 disabled:opacity-60"
+          className="sl-btn sl-btn--primary"
           onClick={requestRange}
           disabled={progress !== null}
           data-action="coral-add-range"
@@ -138,7 +138,7 @@ export function CoralPanel({
           {progress !== null ? `Adding… ${progress}%` : 'Add range'}
         </button>
         <button
-          className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-800 disabled:opacity-60"
+          className="sl-btn"
           onClick={onReset}
           disabled={progress !== null || trajectories.length === 0}
           data-action="coral-reset"
@@ -146,7 +146,7 @@ export function CoralPanel({
           Reset
         </button>
         {(error ?? runError) && (
-          <span className="text-xs text-red-400">{error ?? runError}</span>
+          <span className="sl-error">{error ?? runError}</span>
         )}
       </div>
 
@@ -159,7 +159,7 @@ export function CoralPanel({
         height={aesthetic ? 520 : 360}
       />
 
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-4 sl-hint">
         {aesthetic ? (
           <>
             Each trajectory is traced from its end (the fixed point 1) back to its start, so the shared
@@ -169,8 +169,11 @@ export function CoralPanel({
           </>
         ) : (
           <>
-            <span className="text-orange-400">■</span> odd-parity segment ·{' '}
-            <span className="text-emerald-400">■</span> even-parity segment · driven by each
+            {/* These two swatches must match the canvas stroke colours exactly,
+                so they use the renderer's own constants rather than a theme
+                token — a legend that drifts from the plot is worse than none. */}
+            <span style={{ color: CORAL_ODD_COLOR }}>■</span> odd-parity segment ·{' '}
+            <span style={{ color: CORAL_EVEN_COLOR }}>■</span> even-parity segment · driven by each
             trajectory&apos;s pre-computed parity sequence. Every run adds to the overlay until you Reset.
           </>
         )}
@@ -191,9 +194,9 @@ interface SliderProps {
 
 function Slider({ label, value, min, max, step, suffix, onChange }: SliderProps): JSX.Element {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-slate-400">
-        {label} <span className="text-slate-300">{value}{suffix ?? ''}</span>
+    <label className="sl-field">
+      <span className="sl-label">
+        {label} <span className="text-[color:var(--sl-text)]">{value}{suffix ?? ''}</span>
       </span>
       <input
         type="range"
@@ -202,7 +205,7 @@ function Slider({ label, value, min, max, step, suffix, onChange }: SliderProps)
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-32 accent-sky-500"
+        className="sl-slider"
       />
     </label>
   );
@@ -220,10 +223,10 @@ function NumberField({
   disabled?: boolean;
 }): JSX.Element {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-slate-400">{label}</span>
+    <label className="sl-field">
+      <span className="sl-label">{label}</span>
       <input
-        className="w-24 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 font-mono text-sm outline-none focus:border-sky-500"
+        className="w-24 sl-input sl-input--mono"
         value={value}
         inputMode="numeric"
         onChange={(e) => onChange(e.target.value)}
