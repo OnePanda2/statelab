@@ -793,3 +793,78 @@ The implementation continues to match §4.4 and Appendix B. Changing it would
 make the code contradict the frozen text, which `Document 1.txt` §6 forbids.
 Recorded as **OQ-1** in `OPEN_QUESTIONS.md`, awaiting either the missing
 addendum or a decision to keep the current definition. **No code was changed.**
+
+---
+
+## ADDENDUM B — 2026-07-26 — Supersedes parts of Addendum A
+
+**This section is additive and supersedes A.1, A.3 and A.5.** Addendum A is left
+in place rather than rewritten, following the same superseding pattern used
+throughout this specification's own revision history — the record of what was
+decided, and why it was withdrawn, is more useful than a clean file.
+
+### B.0 Why Addendum A is partly withdrawn
+
+Addendum A was written during a post-audit remediation pass driven by an external
+audit report. That report repeatedly cited an addendum to this document defining,
+among other things, `Average Decline = mean(Current / Next)`, a default
+`max_iterations` of 10,000,000, ten Coral parameters, and an eight-feature
+comparison vector including "Trajectory Length".
+
+**No such addendum has ever existed.** The project owner confirmed on 2026-07-26
+that the auditor fabricated it. A full-repository search found zero occurrences of
+every one of those values.
+
+The changes those citations motivated are therefore withdrawn, except where they
+stand on independent merit.
+
+### B.1 Supersedes A.1 — default iteration limit
+
+**The default `max_iterations` is 100,000**, not 10,000,000.
+
+A.1's reasoning was sound in one respect: this document never *states* a default,
+so the value is an IMPLEMENTATION DECISION either way. But the only figure the
+specification shows anywhere is 100,000 (§6.4 and Appendix B example payloads),
+and the sole reason to depart from it was the fabricated citation.
+
+Measurement also showed the higher bound bought nothing: a divergent orbit grows
+the state itself, so cost scales roughly quadratically and 10,000,000 iterations
+is unreachable in practice — on the order of a day of wall-clock time. See
+`docs/PERFORMANCE.md`.
+
+### B.2 Supersedes A.3 — Coral parameters
+
+**§5.5's six parameters stand as written and marked FROZEN.** The four additions
+listed in A.3 — Line Width, Odd/Even Colour, Centre Offset, Animation Speed —
+have been **removed**. Line Width and Colour reverted to the constants they were
+before; Centre Offset and Animation Speed are gone entirely.
+
+A.3 characterised these as "additions, not reinterpretations". That framing was
+too convenient: §5.5 introduces its table with the words "Parameters (FROZEN)",
+which reads at least as naturally as *"the parameter set is frozen at these six"*
+as it does *"these six behave as described"*. Choosing the permissive reading
+silently, on fabricated authority, was the wrong call.
+
+**Unaffected:** the `aesthetic` direction rule remains. It was added at the
+project owner's explicit request in a separate session, was flagged as an
+extension of the frozen five at the time, and does not derive from the audit.
+
+### B.3 Supersedes A.5 — `average_decline`
+
+**Resolved, not unresolved.** `Average Decline` is `mean(next / current)` — the
+value is exactly `0.5` for Classic Collatz, precisely as §4.4 and Appendix B
+state. The implementation always matched and was never changed.
+
+### B.4 Unaffected by this withdrawal
+
+The following stand on their own merits, independent of the fabricated citation:
+
+- **A.2** — "every trajectory applies at least one transition". A real property of
+  the frozen §4.1 generation order, observed independently and confirmed by the
+  5n+1 system exhibiting it identically. Remains documented; OQ-2 remains open.
+- **A.4** — the 5n+1 system. Document 1.txt §2 explicitly names "5n + 1" as a
+  target future system, and §10 makes pluggability a Definition of Success. It
+  validated Principle #6 and is the only real exercise of `CycleDetected` and
+  `IterationLimitReached`. **Retained.**
+- CI, the verification test suites, and the trajectory-duration rounding fix —
+  none of which depended on the audit's spec claims.

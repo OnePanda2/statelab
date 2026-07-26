@@ -206,20 +206,23 @@ fn migration_requires_a_version_field() {
 
 // ---- Engine defaults ----
 
-/// Pins the default iteration limit. This asserted 100,000 implicitly before the
-/// post-audit pass; it is now an explicit contract because the frontend mirrors
-/// the same number in `DEFAULT_ENGINE_CONFIG` and a silent drift between the two
+/// Pins the default iteration limit as an explicit contract: the frontend mirrors
+/// the same number in `DEFAULT_ENGINE_CONFIG`, and a silent drift between the two
 /// would make the UI request a different bound than the engine's own default.
+///
+/// The value was briefly 10,000,000 during the post-audit pass, on the strength of
+/// a cited spec addendum that did not exist (see docs/AUDIT_REMEDIATION.md).
+/// Reverted to 100,000 — the only figure the specification actually shows.
 #[test]
-fn default_iteration_limit_is_ten_million() {
-    assert_eq!(EngineConfig::default().max_iterations, 10_000_000);
+fn default_iteration_limit_is_one_hundred_thousand() {
+    assert_eq!(EngineConfig::default().max_iterations, 100_000);
 }
 
 /// The default limit must not change what a *converging* run produces — only how
-/// far a non-converging one is allowed to go. n = 27 converges in 111 steps
-/// either way.
+/// far a non-converging one is allowed to go. n = 27 converges in 111 steps under
+/// any limit above that, so this holds regardless of which default is in force.
 #[test]
-fn raising_the_default_limit_does_not_change_converging_runs() {
+fn the_default_limit_does_not_change_converging_runs() {
     let system = ClassicCollatz;
     let tight = statelab_engine::StateEvolutionEngine::run(
         &system,

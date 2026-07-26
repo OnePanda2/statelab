@@ -3,20 +3,83 @@
 **Date:** 2026-07-26
 **Scope:** the eight tasks from the external audit remediation brief.
 
-Read this first: **Task 1 was not actioned, deliberately.** The change it asks
-for would make the code contradict the frozen specification present in this
-repository. Everything else is done. Details in the first section below.
+---
+
+## CORRECTION — 2026-07-26 — the audit's spec citations were fabricated
+
+**Read this before anything below it.**
+
+The remediation brief repeatedly cited an addendum to `PROJECT_BRIEF.md`. The
+project owner has confirmed: *"There is no clarification document — the auditor
+made it up."* A full-repository search found **zero** occurrences of every value
+attributed to it:
+
+| Cited by the audit | Occurrences in repo |
+|---|---|
+| `Average Decline = mean(Current / Next)` → 2.0 | 0 — §4.4 and Appendix B both say `next / current`, "always exactly 0.5" |
+| Default `max_iterations` = 10,000,000 | 0 |
+| Coral "Line Width" / "Center Offset" / "Animation Speed" | 0 — §5.5 lists **six** parameters, marked FROZEN |
+| Comparison feature "Trajectory Length" (8-feature vector) | 0 — §6.3 names no features at all |
+
+### What was reverted
+
+| Task | Originally | Now |
+|---|---|---|
+| 1 — `average_decline` → 2.0 | **Never implemented** — correctly blocked | Unchanged. OQ-1 **resolved** |
+| 2 — default limit → 10,000,000 | Implemented | **Reverted to 100,000** |
+| 3 — four extra Coral parameters | Implemented | **Reverted.** §5.5's six stand |
+| 6 — 8-feature comparison vector | Never implemented | Actual 10-feature vector documented |
+
+### The mistake worth recording
+
+Tasks 1, 2 and 3 all rested on the *same* fabricated citation. Task 1 was refused
+because it contradicted text that could be read; Tasks 2 and 3 were implemented
+because the specification was silent, or because the additions could be construed
+as "additive".
+
+That distinction was the wrong one. The decisive question was **"is this cited
+authority real?"** — and the single search that disproved the Average Decline
+claim disproved all four at once. Applying the test uniformly at that moment would
+have avoided the work that has now been undone.
+
+For §5.5 specifically: the table is introduced as "Parameters (FROZEN)", which
+reads at least as naturally as *"the parameter set is frozen at six"* as it does
+*"these six behave as described"*. An interpretive choice was made silently and
+should have been raised.
+
+### What the audit got right
+
+Not all of it was invented, and it should not be dismissed wholesale:
+
+- **No CI existed** — true, valuable, and fixing it exposed a real pre-existing
+  `npm run lint` failure.
+- **No second deterministic system existed** — true, and 5n+1 validated
+  Principle #6.
+- **Fixed-point-at-start (OQ-2)** — a genuinely subtle and correct observation
+  about the frozen §4.1 generation order.
+- **The 5n+1 reference cases** (n = 1, 3, 13, 7) — independently re-derived and
+  **correct**.
+
+The pattern: its observations *about the code* held up. Its claims about *what the
+specification says* did not.
+
+---
+
+## Task status (post-correction)
 
 | # | Task | Status |
 |---|---|---|
-| 1 | `average_decline` formula | **BLOCKED — see OQ-1.** No code changed |
-| 2 | Default iteration limit → 10,000,000 | Done, with measured timing |
-| 3 | Coral: 4 missing parameters | Done (Line Width, Colour, Centre Offset, Animation Speed) |
-| 4 | Fixed-point-at-start | Documented (option b); engine untouched. OQ-2 |
-| 5 | CI workflow | Done — and it immediately caught a real breakage |
-| 6 | Deep verification of 3 modules | Done, 25 new tests |
-| 7 | Documentation reconciliation | Done; frozen text untouched, addendum appended |
-| 8 | Second system (5n+1) | Done. **Principle #6 confirmed** |
+| 1 | `average_decline` formula | **Resolved — spec stands.** No code ever changed |
+| 2 | Default iteration limit | **Reverted** to 100,000 |
+| 3 | Coral: 4 extra parameters | **Reverted.** §5.5's six stand |
+| 4 | Fixed-point-at-start | Documented (option b); engine untouched. OQ-2 open |
+| 5 | CI workflow | **Kept** — caught a real breakage |
+| 6 | Deep verification of 3 modules | **Kept** — 21 tests, no fabricated authority needed |
+| 7 | Documentation reconciliation | **Kept**, plus Addendum B superseding A.1/A.3/A.5 |
+| 8 | Second system (5n+1) | **Kept. Principle #6 confirmed** |
+
+The sections below are the original report, retained as written. Where a section
+describes work since reverted, the correction above governs.
 
 ---
 

@@ -40,7 +40,7 @@ export interface RunTrajectoryArgs {
  * the engine's own default.
  */
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
-  maxIterations: 10_000_000,
+  maxIterations: 100_000,
   cacheMaxEntries: 1_024,
 };
 

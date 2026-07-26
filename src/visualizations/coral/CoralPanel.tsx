@@ -15,12 +15,7 @@
 
 import { useMemo, useState } from 'react';
 import type { Trajectory } from '@/types/trajectory';
-import {
-  Coral,
-  DEFAULT_EVEN_COLOR,
-  DEFAULT_LINE_WIDTH,
-  DEFAULT_ODD_COLOR,
-} from './Coral';
+import { Coral } from './Coral';
 import { DIRECTION_RULES, type CoralParams, type DirectionRule } from './coralPath';
 
 export interface CoralPanelProps {
@@ -53,20 +48,6 @@ export function CoralPanel({
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(-90);
   const [rule, setRule] = useState<DirectionRule>('relative');
-  const [lineWidth, setLineWidth] = useState(DEFAULT_LINE_WIDTH);
-  const [oddColor, setOddColor] = useState(DEFAULT_ODD_COLOR);
-  const [evenColor, setEvenColor] = useState(DEFAULT_EVEN_COLOR);
-  const [offsetX, setOffsetX] = useState(0);
-  const [offsetY, setOffsetY] = useState(0);
-  /**
-   * IMPLEMENTATION DECISION (§5.5): Animation Speed is expressed in **segments
-   * per second**, and `null` means "instant" — the pre-existing behaviour. The
-   * spec named the parameter but never defined it, so a concrete, inspectable
-   * unit was chosen over an opaque 0-1 slider. `null` is the default precisely
-   * so nothing about the current rendering changes until the user opts in.
-   */
-  const [animationSpeed, setAnimationSpeed] = useState<number | null>(null);
-  const [animationNonce, setAnimationNonce] = useState(0);
   const [bulkFrom, setBulkFrom] = useState('1');
   const [bulkTo, setBulkTo] = useState('500');
   const [error, setError] = useState<string | null>(null);
@@ -125,15 +106,6 @@ export function CoralPanel({
         <Slider label="Opacity" value={opacity} min={0.05} max={1} step={0.05} onChange={setOpacity} />
         <Slider label="Scale" value={scale} min={0.2} max={4} step={0.1} suffix="×" onChange={setScale} />
         <Slider label="Rotation" value={rotation} min={-180} max={180} step={1} suffix="°" onChange={setRotation} />
-        <Slider
-          label="Line width"
-          value={lineWidth}
-          min={0.2}
-          max={6}
-          step={0.1}
-          suffix="px"
-          onChange={setLineWidth}
-        />
         <label className="flex flex-col gap-1">
           <span className="text-xs uppercase tracking-wide text-slate-400">Direction rule</span>
           <select
@@ -148,56 +120,6 @@ export function CoralPanel({
             ))}
           </select>
         </label>
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-end gap-x-4 gap-y-3 rounded-lg border border-slate-700/50 bg-slate-900/30 p-3">
-        <NumberField
-          label="Offset X"
-          value={String(offsetX)}
-          onChange={(v) => setOffsetX(Number(v) || 0)}
-        />
-        <NumberField
-          label="Offset Y"
-          value={String(offsetY)}
-          onChange={(v) => setOffsetY(Number(v) || 0)}
-        />
-        {!aesthetic && (
-          <>
-            <ColorField label="Odd color" value={oddColor} onChange={setOddColor} />
-            <ColorField label="Even color" value={evenColor} onChange={setEvenColor} />
-          </>
-        )}
-        <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-slate-400">
-            Animation{' '}
-            <span className="text-slate-300">
-              {animationSpeed === null ? 'instant' : `${animationSpeed}/s`}
-            </span>
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={400}
-            step={10}
-            // 0 maps back to `null` (instant), keeping the default reachable.
-            value={animationSpeed ?? 0}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setAnimationSpeed(v === 0 ? null : v);
-              setAnimationNonce((n) => n + 1);
-            }}
-            className="w-32 accent-sky-500"
-            data-control="coral-animation-speed"
-          />
-        </label>
-        <button
-          className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-800 disabled:opacity-50"
-          onClick={() => setAnimationNonce((n) => n + 1)}
-          disabled={animationSpeed === null}
-          data-action="coral-replay"
-        >
-          Replay
-        </button>
       </div>
 
       <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-slate-700/50 bg-slate-900/30 p-3">
@@ -234,13 +156,6 @@ export function CoralPanel({
         rule={rule}
         opacity={opacity}
         scale={scale}
-        lineWidth={lineWidth}
-        oddColor={oddColor}
-        evenColor={evenColor}
-        offsetX={offsetX}
-        offsetY={offsetY}
-        animationSpeed={animationSpeed}
-        animationNonce={animationNonce}
         height={aesthetic ? 520 : 360}
       />
 
@@ -288,29 +203,6 @@ function Slider({ label, value, min, max, step, suffix, onChange }: SliderProps)
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-32 accent-sky-500"
-      />
-    </label>
-  );
-}
-
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}): JSX.Element {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-slate-400">{label}</span>
-      <input
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 w-14 cursor-pointer rounded border border-slate-700 bg-slate-800"
-        data-control={`coral-${label.toLowerCase().replace(/\s+/g, '-')}`}
       />
     </label>
   );

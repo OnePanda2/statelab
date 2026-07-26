@@ -49,10 +49,9 @@ export function DatasetExplorer(): JSX.Element {
   const [max, setMax] = useState('10000');
   const [seed, setSeed] = useState('42');
   const [csv, setCsv] = useState('3, 27, 97, 871');
-  // Mirrors the engine default (10,000,000). User-editable per sweep — lower it
-  // when exploring a system that can diverge, so one runaway item cannot stall
-  // the whole dataset.
-  const [maxIterations, setMaxIterations] = useState('10000000');
+  // Mirrors the engine default. User-editable per sweep — lower it when exploring
+  // a system that can diverge, so one runaway item cannot stall the whole dataset.
+  const [maxIterations, setMaxIterations] = useState('100000');
 
   const [running, setRunning] = useState(false);
   const [aggregate, setAggregate] = useState<DatasetAggregate>(emptyAggregate());
@@ -67,7 +66,7 @@ export function DatasetExplorer(): JSX.Element {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   function buildSpec(): DatasetSpec {
-    const mi = Number(maxIterations) || 10_000_000;
+    const mi = Number(maxIterations) || 100_000;
     switch (generator) {
       case 'range':
       case 'even':

@@ -9,11 +9,27 @@ Status legend: **OPEN** (awaiting sign-off) · **RESOLVED** (decision recorded).
 
 ---
 
-## OQ-1 — `average_decline`: the cited addendum is not in this repository — **OPEN**
+## OQ-1 — `average_decline`: the cited addendum did not exist — **RESOLVED**
 
 **Raised:** 2026-07-26, during the post-audit remediation pass.
-**Blocks:** the audit's Task 1.
-**Nothing was changed.** The formula is untouched pending a decision.
+**Resolved:** 2026-07-26, by the project owner.
+
+### Resolution
+
+**The addendum was fabricated by the auditor.** Confirmed directly by the project
+owner: *"There is no clarification document — the auditor made it up."*
+
+**Outcome: the specification stands. `average_decline` remains
+`mean(next / current)`, which is exactly `0.5` for Classic Collatz.** No code
+was ever changed, so nothing needed reverting for this item.
+
+The investigation that produced this resolution is preserved below, because it
+also uncovered how much of the remediation brief rested on the same fabricated
+source — see the "Consequences" note at the end of this entry.
+
+### Original report (retained for the record)
+
+**Nothing was changed.** The formula was left untouched pending a decision.
 
 ### The request
 
@@ -81,11 +97,32 @@ is what the committed spec says. No code change; close this question.
 both conventions are available. Additive and non-breaking under §4.9, but adds
 a metric the frozen spec never named.
 
-### Recommendation
+### Recommendation (as written at the time)
 
 **(a) if the addendum can be produced, otherwise (b).** The blocker is purely
 evidentiary — the change itself is small and safe. What is *not* safe is
 silently making the code disagree with the only specification present.
+
+### Consequences of the resolution
+
+Option **(b)** applies: the committed specification governs, and the formula is
+unchanged.
+
+The same fabricated source underpinned three other items in the remediation
+brief. Two of them **were implemented before the fabrication was established**,
+and have since been reverted:
+
+| Item | Fate |
+|---|---|
+| `average_decline` → 2.0 | Never implemented ✅ |
+| Default `max_iterations` → 10,000,000 | Implemented, then **reverted** to 100,000 |
+| Coral: 4 extra parameters (Line Width, Colour, Centre Offset, Animation Speed) | Implemented, then **reverted** — §5.5 lists six parameters and marks them FROZEN |
+| Comparison Lab: an 8-feature vector including "Trajectory Length" | Never implemented — §6.3 names no features, so the actual 10-feature vector was documented rather than changed |
+
+The lesson recorded for future passes: the test that mattered was *"does this
+cited authority exist?"*, applied uniformly. It was applied to the item that
+contradicted readable text and not to the items where the specification was
+merely silent. See `docs/AUDIT_REMEDIATION.md` → "Correction".
 
 ---
 
