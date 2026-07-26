@@ -53,6 +53,42 @@ not guarantees — they are machine-specific.
 - **The cache earns its place**: a hit is ~6.4× cheaper than a recompute, and the
   remaining cost is the Trajectory clone handed to the consumer, not mathematics.
 
+## The 10,000,000 default iteration limit — measured, not assumed
+
+The default limit was raised from 100,000 to 10,000,000 (PROJECT_BRIEF Addendum
+A.1). Measured on the same machine, release profile:
+
+| Case | Time | Note |
+|---|---:|---|
+| Classic Collatz, n = 27, default limit | **0.27 ms** | converges in 111 steps; the limit is never approached |
+| Classic Collatz sweep 1..100,000, default limit | **10.6 s** | longest orbit n = 77,031 at 350 iterations |
+| 5n+1 from n = 7, limit 10,000 | 0.05 s | final value 319 digits |
+| 5n+1 from n = 7, limit 50,000 | 1.81 s | 1,514 digits |
+| 5n+1 from n = 7, limit 100,000 | 8.17 s | 3,099 digits |
+| 5n+1 from n = 7, limit 200,000 | 38.9 s | 6,414 digits |
+
+**Conclusion for converging systems: the change is free.** Classic Collatz never
+reaches the limit at any tested input, so raising it costs nothing — a full
+100,000-trajectory sweep still finishes in ~10 s.
+
+**Conclusion for divergent systems: the limit is effectively unreachable, and
+that is a real caveat.** A diverging orbit grows the state itself, so each step
+costs more than the last: the timings above scale roughly **quadratically**
+(2× the iterations ≈ 4.8× the time). Extrapolating, 5n+1 from n = 7 would need
+on the order of **a day** of wall-clock time to actually hit 10,000,000
+iterations. In practice the binding constraint on such a run is time, not the
+iteration count.
+
+This is not a reason to lower the default — for the converging systems that
+dominate normal use it is strictly better, and a run that would take a day is one
+the user wants to interrupt regardless. But it does mean:
+
+- The Dataset Explorer's per-sweep iteration limit is **user-editable**, and
+  should be lowered when exploring a system that can diverge, so one runaway item
+  cannot stall an entire sweep.
+- Tests that need `IterationLimitReached` must set a small explicit limit. The
+  5n+1 suite uses 1,000 for exactly this reason.
+
 ## Other performance-relevant settings
 
 - **Dataset Explorer streaming batch size** is implementer-tunable (§7.7) and

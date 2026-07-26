@@ -9,9 +9,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use statelab_dataset::{for_each_summary, DatasetSpec};
-use statelab_engine::{
-    ClassicCollatz, EngineConfig, InitialStateInput, Trajectory, TrajectoryCache,
-};
+use statelab_engine::{EngineConfig, InitialStateInput, Trajectory, TrajectoryCache};
 use tauri::ipc::Channel;
 
 /// Process-wide memoization cache (§4.8), owned by the shell. The engine itself
@@ -63,13 +61,6 @@ pub fn run_trajectory(
     config: EngineConfigArgs,
     state: tauri::State<'_, AppState>,
 ) -> Result<Trajectory, String> {
-    // Classic Collatz is the only registered system today. Reject anything else
-    // explicitly rather than silently substituting it (§2.3 — never invent behaviour).
-    if system_id != "classic-collatz" {
-        return Err(format!("unknown system_id: {system_id}"));
-    }
-
-    let system = ClassicCollatz;
     let engine_config: EngineConfig = config.into();
     let input = InitialStateInput::new(initial_state);
 
@@ -77,7 +68,32 @@ pub fn run_trajectory(
         .cache
         .lock()
         .map_err(|_| "trajectory cache lock was poisoned".to_string())?;
-    Ok(cache.get_or_compute(&system, &input, &engine_config))
+
+    // Dispatch through the systems registry. An unknown id is still *rejected*,
+    // never silently substituted (Principle #4) — it just is no longer the case
+    // that everything except Classic Collatz is unknown.
+    statelab_engine::run_by_id_cached(&system_id, &input, &engine_config, &mut cache)
+        .ok_or_else(|| format!("unknown system_id: {system_id}"))
+}
+
+/// Lists the systems this build can run, so the UI can offer them without
+/// hardcoding a list that could drift from the engine's registry.
+#[tauri::command]
+pub fn list_systems() -> Vec<SystemDescriptor> {
+    statelab_engine::AVAILABLE_SYSTEMS
+        .iter()
+        .map(|s| SystemDescriptor {
+            id: s.id.to_string(),
+            label: s.label.to_string(),
+        })
+        .collect()
+}
+
+/// A system offered to the UI.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SystemDescriptor {
+    pub id: String,
+    pub label: String,
 }
 
 /// Streams a generated dataset (§6.2) back over an IPC channel, one compact

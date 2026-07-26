@@ -232,6 +232,26 @@ fn invalid_inputs_report_system_error() {
     }
 }
 
+/// The duration field is the only nondeterministic value in a Trajectory, and an
+/// unrounded `f64` is not guaranteed to survive a JSON round trip bit-exactly —
+/// which made `schema_round_trips` flaky. Capture rounds it to microseconds, so
+/// re-serializing must now be exactly stable for any run.
+#[test]
+fn execution_duration_round_trips_exactly() {
+    for n in [1u64, 3, 27, 871] {
+        let t = run(n);
+        let ms = t.execution_metadata.computation_duration_ms;
+        let reparsed: f64 =
+            serde_json::from_str(&serde_json::to_string(&ms).expect("ser")).expect("de");
+        assert_eq!(
+            ms, reparsed,
+            "duration {ms} for n={n} did not round-trip exactly"
+        );
+        // Rounded to microsecond resolution: 1000x the value is a whole number.
+        assert_eq!((ms * 1_000.0).fract(), 0.0, "duration {ms} is not rounded");
+    }
+}
+
 #[test]
 fn schema_round_trips() {
     let t = run(27);

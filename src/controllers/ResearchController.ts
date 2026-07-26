@@ -20,11 +20,23 @@ export const CLASSIC_COLLATZ = 'classic-collatz';
 
 export class ResearchController {
   private config: EngineConfig;
+  /** The system subsequent runs use. Defaults to the first built-in system. */
+  private systemId: string = CLASSIC_COLLATZ;
   /** Trajectories produced this session, most-recent last. */
   private readonly loaded: Trajectory[] = [];
 
   constructor(config: EngineConfig = DEFAULT_ENGINE_CONFIG) {
     this.config = config;
+  }
+
+  /** The deterministic system currently selected. */
+  getSystemId(): string {
+    return this.systemId;
+  }
+
+  /** Selects the system used by subsequent runs (§5.1 — orchestration only). */
+  setSystemId(systemId: string): void {
+    this.systemId = systemId;
   }
 
   /** The engine configuration currently in effect. */
@@ -44,7 +56,7 @@ export class ResearchController {
    */
   async run(initialState: string): Promise<Trajectory> {
     const trajectory = await runTrajectory({
-      systemId: CLASSIC_COLLATZ,
+      systemId: this.systemId,
       initialState,
       config: this.config,
     });

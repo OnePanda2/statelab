@@ -1,9 +1,23 @@
-//! Classic Collatz Feature Extractor (§4.4).
+//! Feature Extractor for parity-driven big-integer systems (§4.4).
 //!
-//! Every metric in the §4.4 table is computed here, exactly once, from the raw
-//! completed state sequence. Arbitrary-precision integers are used throughout;
-//! `f64` appears **only** where §4.4 explicitly calls for a ratio (growth /
-//! decline / odd / even ratios) — the metric-extraction boundary permitted by §4.5.
+//! Originally written as Classic Collatz's extractor, and factored out here when
+//! a second system (5n+1) was added: **none of these metrics are Collatz-specific**.
+//! Every one is derived from the raw `BigUint` state sequence and the parity of
+//! each pre-transition value, so any system whose state is a `BigUint` and whose
+//! branch is chosen by parity — Collatz `3n+1`, `5n+1`, and any future `kn+1`
+//! variant — gets identical, consistent metrics from this one implementation.
+//!
+//! IMPLEMENTATION DECISION (§4.4): sharing one extractor rather than copying it
+//! per system. The frozen spec defines metrics per-system via each system's own
+//! Feature Extractor; it does not forbid two systems delegating to the same
+//! function, and duplicating ~150 lines of metric math per system would be a
+//! correctness hazard (Principle #1) the moment one copy is fixed and the other
+//! is not.
+//!
+//! Metrics are computed exactly once, from the completed state sequence.
+//! Arbitrary-precision integers are used throughout; `f64` appears **only** where
+//! §4.4 explicitly calls for a ratio (growth / decline / odd / even ratios) — the
+//! metric-extraction boundary permitted by §4.5.
 //!
 //! ## Metric-count note (flagged, not silently resolved)
 //! The prose in the brief refers to "14 metrics", but the §4.4 table enumerates
@@ -19,7 +33,7 @@ use serde_json::{json, Value};
 use crate::system::{RawTrajectory, SystemMetrics};
 
 /// Computes the full Classic Collatz metrics dictionary from a completed run.
-pub(crate) fn extract(raw: &RawTrajectory<'_, BigUint>) -> SystemMetrics {
+pub fn extract(raw: &RawTrajectory<'_, BigUint>) -> SystemMetrics {
     let states = raw.states();
     let iteration_count = raw.iteration_count();
 

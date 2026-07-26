@@ -28,7 +28,19 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            max_iterations: 100_000,
+            // IMPLEMENTATION DECISION (§4.1): the frozen spec never states a
+            // default iteration limit — Appendix B and §6.4 only show 100,000 in
+            // *example* payloads, which are illustrations, not a mandate. Raised
+            // to 10,000,000 so genuinely divergent systems (e.g. 5n+1 from n = 7,
+            // which is still climbing past 100,000 steps) are explored far enough
+            // to be interesting before the engine gives up. Costs nothing for
+            // Classic Collatz, which converges in hundreds of steps; the limit is
+            // only ever *reached* by non-converging runs. See docs/PERFORMANCE.md
+            // for the measured worst case.
+            max_iterations: 10_000_000,
+            // IMPLEMENTATION DECISION (§4.8): eviction bound is explicitly left to
+            // the implementer by the frozen spec; exposed as config, never hardcoded
+            // at a call site.
             cache_max_entries: 1_024,
         }
     }

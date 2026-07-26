@@ -192,8 +192,17 @@ impl Trajectory {
 
 impl ExecutionMetadata {
     fn capture(config: &EngineConfig, started_at: Instant, cache_hit: bool) -> Self {
+        // IMPLEMENTATION DECISION (§7.4): the raw wall-clock duration is the only
+        // nondeterministic field in a Trajectory, and an arbitrary-precision f64
+        // is not guaranteed to compare equal after a JSON round trip — which made
+        // the §7.4 round-trip test intermittently fail. Rounded to microsecond
+        // resolution (3 dp of a millisecond) so the value always round-trips
+        // exactly. Sub-microsecond timing precision is meaningless for
+        // reproducibility (Principle #2) and nothing consumes it as a benchmark —
+        // `criterion` owns performance measurement (§7.7).
+        let duration_ms = started_at.elapsed().as_secs_f64() * 1_000.0;
         Self {
-            computation_duration_ms: started_at.elapsed().as_secs_f64() * 1_000.0,
+            computation_duration_ms: (duration_ms * 1_000.0).round() / 1_000.0,
             engine_version: ENGINE_VERSION.to_string(),
             cache_hit,
             iteration_limit_used: config.max_iterations,

@@ -203,3 +203,36 @@ fn migration_requires_a_version_field() {
     let err = registry.migrate(doc, "2.0.0").unwrap_err();
     assert!(err.message.contains("missing"));
 }
+
+// ---- Engine defaults ----
+
+/// Pins the default iteration limit. This asserted 100,000 implicitly before the
+/// post-audit pass; it is now an explicit contract because the frontend mirrors
+/// the same number in `DEFAULT_ENGINE_CONFIG` and a silent drift between the two
+/// would make the UI request a different bound than the engine's own default.
+#[test]
+fn default_iteration_limit_is_ten_million() {
+    assert_eq!(EngineConfig::default().max_iterations, 10_000_000);
+}
+
+/// The default limit must not change what a *converging* run produces — only how
+/// far a non-converging one is allowed to go. n = 27 converges in 111 steps
+/// either way.
+#[test]
+fn raising_the_default_limit_does_not_change_converging_runs() {
+    let system = ClassicCollatz;
+    let tight = statelab_engine::StateEvolutionEngine::run(
+        &system,
+        &input(27),
+        &EngineConfig::with_max_iterations(100_000),
+    );
+    let generous =
+        statelab_engine::StateEvolutionEngine::run(&system, &input(27), &EngineConfig::default());
+    assert_eq!(tight.state_sequence, generous.state_sequence);
+    assert_eq!(tight.iteration_count, generous.iteration_count);
+    assert_eq!(tight.trajectory_status, generous.trajectory_status);
+    assert_eq!(
+        tight.system_specific_metrics,
+        generous.system_specific_metrics
+    );
+}

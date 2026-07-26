@@ -34,9 +34,13 @@ export interface RunTrajectoryArgs {
   config: EngineConfig;
 }
 
-/** Default engine configuration, matching the Rust `EngineConfig::default()`. */
+/**
+ * Default engine configuration. **Must mirror the Rust `EngineConfig::default()`**
+ * — a mismatch would silently make the frontend request a different bound than
+ * the engine's own default.
+ */
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
-  maxIterations: 100_000,
+  maxIterations: 10_000_000,
   cacheMaxEntries: 1_024,
 };
 
@@ -46,6 +50,28 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
  * `initialState` comes back as a well-formed `SystemError` trajectory, not an
  * exception.
  */
+/** A deterministic system the engine can run, as reported by the host. */
+export interface SystemDescriptor {
+  id: string;
+  label: string;
+}
+
+/**
+ * Systems available in this build. Fetched from the host rather than hardcoded,
+ * so the picker can never drift from the engine's own registry.
+ */
+export async function listSystems(): Promise<SystemDescriptor[]> {
+  if (isTauri()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<SystemDescriptor[]>('list_systems');
+  }
+  const response = await fetch('/api/systems');
+  if (!response.ok) {
+    throw new Error(`engine host returned HTTP ${response.status}`);
+  }
+  return (await response.json()) as SystemDescriptor[];
+}
+
 export async function runTrajectory(args: RunTrajectoryArgs): Promise<Trajectory> {
   if (isTauri()) {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -66,10 +92,16 @@ export async function runTrajectory(args: RunTrajectoryArgs): Promise<Trajectory
   });
 
   const response = await fetch(`/api/run?${params.toString()}`);
+  // The host reports an unknown system_id as an error object rather than a
+  // Trajectory — surface it instead of letting a malformed object reach the UI.
   if (!response.ok) {
     throw new Error(`engine host returned HTTP ${response.status}`);
   }
-  return (await response.json()) as Trajectory;
+  const payload = (await response.json()) as Trajectory | { error: string };
+  if ('error' in payload) {
+    throw new Error(payload.error);
+  }
+  return payload;
 }
 
 // ---- Dataset streaming (§6.2) ----

@@ -20,7 +20,8 @@ fn main() {
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::run_trajectory,
-            commands::run_dataset
+            commands::run_dataset,
+            commands::list_systems
         ])
         .run(tauri::generate_context!())
         .expect("error while running the StateLab application");

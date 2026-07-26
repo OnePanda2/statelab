@@ -30,11 +30,38 @@ export interface CoralProps {
   rule: DirectionRule;
   opacity: number;
   scale: number;
+  /** Stroke width in CSS pixels for the analytical modes. */
+  lineWidth?: number;
+  /** Stroke colour for segments following an odd-parity transition. */
+  oddColor?: string;
+  /** Stroke colour for segments following an even-parity transition. */
+  evenColor?: string;
+  /** Pixel shift of the drawing away from dead-centre. */
+  offsetX?: number;
+  offsetY?: number;
+  /**
+   * Segments revealed per second. `null` (the default) means **instant** — the
+   * whole path is drawn in one frame, exactly as before this control existed.
+   */
+  animationSpeed?: number | null;
+  /** Bumping this restarts an in-progress animation. */
+  animationNonce?: number;
   height?: number;
 }
 
-const ODD_COLOR = '#f0883e'; // orange — segments following an odd-parity transition
-const EVEN_COLOR = '#3fb950'; // green — segments following an even-parity transition
+/** Defaults preserve the pre-existing hardcoded appearance exactly. */
+export const DEFAULT_ODD_COLOR = '#f0883e'; // orange — odd-parity transition
+export const DEFAULT_EVEN_COLOR = '#3fb950'; // green — even-parity transition
+/**
+ * IMPLEMENTATION DECISION (§5.5): one exposed "Line Width" drives both draw
+ * modes, which previously hardcoded 1.2 (analytical) and 0.7 (aesthetic). The
+ * slider is calibrated in analytical pixels and the aesthetic mode uses
+ * `width * AESTHETIC_WIDTH_RATIO`, preserving the original 0.7/1.2 relationship.
+ * So the default below reproduces both prior constants exactly, and moving the
+ * slider scales both modes together.
+ */
+export const DEFAULT_LINE_WIDTH = 1.2;
+const AESTHETIC_WIDTH_RATIO = 0.7 / 1.2;
 
 /** Reads the pre-computed parity sequence off a Trajectory (never recomputed). */
 function readParity(trajectory: Trajectory): number[] | null {
@@ -51,6 +78,13 @@ export function Coral({
   rule,
   opacity,
   scale,
+  lineWidth = DEFAULT_LINE_WIDTH,
+  oddColor = DEFAULT_ODD_COLOR,
+  evenColor = DEFAULT_EVEN_COLOR,
+  offsetX = 0,
+  offsetY = 0,
+  animationSpeed = null,
+  animationNonce = 0,
   height = 360,
 }: CoralProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,7 +98,14 @@ export function Coral({
     if (!canvas || parities.length === 0) {
       return;
     }
-    const draw = (): void => {
+    // Computed once per parameter change and shared by every frame: all paths
+    // need one common fit-to-canvas transform or the overlay would not line up,
+    // and re-deriving them per animation frame would be wasteful.
+    const paths = parities.map((parity) => computeCoralPath(parity, params, rule));
+    const longest = paths.reduce((max, p) => Math.max(max, p.length), 0);
+
+    /** Draws the first `revealed` segments of every path (Infinity = all). */
+    const draw = (revealed: number): void => {
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         return;
@@ -84,20 +125,60 @@ export function Coral({
         ctx.fillRect(0, 0, cssWidth, cssHeight);
       }
 
-      // Compute every path first so they can share one fit-to-canvas transform —
-      // without a common frame the overlay would not line up.
-      const paths = parities.map((parity) => computeCoralPath(parity, params, rule));
-      drawCoral(ctx, cssWidth, cssHeight, paths, parities, opacity, scale, aesthetic);
+      drawCoral(ctx, cssWidth, cssHeight, paths, parities, {
+        opacity,
+        scale,
+        aesthetic,
+        lineWidth,
+        oddColor,
+        evenColor,
+        offsetX,
+        offsetY,
+        revealed,
+      });
     };
 
-    draw();
-    let observer: ResizeObserver | undefined;
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(() => draw());
-      observer.observe(canvas);
+    // BACKWARD COMPATIBILITY: with no animation speed set (the default) this is
+    // the original single, instant, full-path render — same call, same output,
+    // no rAF loop. The progressive reveal only engages once the user asks for it.
+    if (animationSpeed === null || animationSpeed <= 0) {
+      draw(Number.POSITIVE_INFINITY);
+      let observer: ResizeObserver | undefined;
+      if (typeof ResizeObserver !== 'undefined') {
+        observer = new ResizeObserver(() => draw(Number.POSITIVE_INFINITY));
+        observer.observe(canvas);
+      }
+      return () => observer?.disconnect();
     }
-    return () => observer?.disconnect();
-  }, [parities, params, rule, opacity, scale, height]);
+
+    // Progressive reveal: grow the drawn prefix at `animationSpeed` segments per
+    // second until the longest path is fully drawn, then stop.
+    let frame = 0;
+    const startedAt = performance.now();
+    const step = (now: number): void => {
+      const revealed = ((now - startedAt) / 1000) * animationSpeed;
+      draw(revealed);
+      if (revealed < longest) {
+        frame = requestAnimationFrame(step);
+      }
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [
+    parities,
+    params,
+    rule,
+    opacity,
+    scale,
+    height,
+    lineWidth,
+    oddColor,
+    evenColor,
+    offsetX,
+    offsetY,
+    animationSpeed,
+    animationNonce,
+  ]);
 
   if (trajectories.length === 0) {
     return (
@@ -134,6 +215,20 @@ export function Coral({
   );
 }
 
+/** Everything the renderer needs beyond the geometry itself. */
+interface DrawOptions {
+  opacity: number;
+  scale: number;
+  aesthetic: boolean;
+  lineWidth: number;
+  oddColor: string;
+  evenColor: string;
+  offsetX: number;
+  offsetY: number;
+  /** How many leading segments of each path to draw; `Infinity` draws all. */
+  revealed: number;
+}
+
 /** Draws all paths under one shared fit-to-canvas transform. */
 function drawCoral(
   ctx: CanvasRenderingContext2D,
@@ -141,10 +236,9 @@ function drawCoral(
   height: number,
   paths: Point[][],
   parities: number[][],
-  opacity: number,
-  scale: number,
-  aesthetic: boolean,
+  options: DrawOptions,
 ): void {
+  const { opacity, scale, aesthetic, lineWidth, oddColor, evenColor, revealed } = options;
   const all = paths.flat();
   if (all.length < 2) {
     return;
@@ -157,8 +251,14 @@ function drawCoral(
   const s = fit * scale;
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cy = (bounds.minY + bounds.maxY) / 2;
-  const ox = width / 2;
-  const oy = height / 2;
+  // Centre offset is applied AFTER the auto-fit maths, so it shifts the finished
+  // drawing without disturbing the fit-to-canvas scaling. (0, 0) is therefore
+  // pixel-identical to the behaviour before this parameter existed.
+  const ox = width / 2 + options.offsetX;
+  const oy = height / 2 + options.offsetY;
+  /** Number of segments to draw from a path of `len` points. */
+  const limit = (len: number): number =>
+    Number.isFinite(revealed) ? Math.max(0, Math.min(len - 1, Math.floor(revealed))) : len - 1;
 
   // Canvas y grows downward, so flip y to keep the turtle's +y pointing up.
   const projX = (x: number): number => ox + (x - cx) * s;
@@ -169,12 +269,23 @@ function drawCoral(
     // Alpha falls off as the count rises so a large overlay does not clip to white.
     const alpha = Math.max(0.05, Math.min(1, opacity / Math.sqrt(paths.length || 1)));
     ctx.strokeStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
-    ctx.lineWidth = 0.7;
+    // Rounded to 3 dp: the bare product is subject to float noise
+    // (1.2 * 0.7/1.2 = 0.6999999999999999), and a clean width is both easier to
+    // reason about and exactly reproduces the previous hardcoded 0.7.
+    ctx.lineWidth = Math.round(lineWidth * AESTHETIC_WIDTH_RATIO * 1000) / 1000;
     ctx.lineCap = 'round';
     ctx.globalAlpha = 1;
     for (const path of paths) {
+      const count = limit(path.length);
+      if (count < 1) {
+        continue;
+      }
       ctx.beginPath();
-      path.forEach((p, i) => {
+      for (let i = 0; i <= count; i++) {
+        const p = path[i];
+        if (!p) {
+          continue;
+        }
         const px = projX(p.x);
         const py = projY(p.y);
         if (i === 0) {
@@ -182,7 +293,7 @@ function drawCoral(
         } else {
           ctx.lineTo(px, py);
         }
-      });
+      }
       ctx.stroke();
     }
     return;
@@ -190,16 +301,17 @@ function drawCoral(
 
   // Analytical modes: per-segment parity colouring, as before.
   ctx.globalAlpha = opacity;
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = lineWidth;
   paths.forEach((path, pi) => {
     const parity = parities[pi] ?? [];
-    for (let i = 0; i < path.length - 1; i++) {
+    const count = limit(path.length);
+    for (let i = 0; i < count; i++) {
       const a = path[i];
       const b = path[i + 1];
       if (!a || !b) {
         continue;
       }
-      ctx.strokeStyle = parity[i] === 1 ? ODD_COLOR : EVEN_COLOR;
+      ctx.strokeStyle = parity[i] === 1 ? oddColor : evenColor;
       ctx.beginPath();
       ctx.moveTo(projX(a.x), projY(a.y));
       ctx.lineTo(projX(b.x), projY(b.y));

@@ -1,0 +1,85 @@
+# Regression gate.
+#
+# PROJECT_BRIEF.md's Validation Strategy requires that "regression tests must run
+# automatically whenever engine logic changes". Before this workflow existed,
+# "automatically" meant "if someone remembers to run them locally".
+#
+# Every check here is one a developer can also run locally with the identical
+# command, so CI can never diverge from what `cargo`/`npm` do on a workstation.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch makes the previous run redundant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # NOTE: deliberately no global `RUSTFLAGS: -D warnings`. It would apply to
+  # dependency compilation too, so an upstream crate's warning could fail our
+  # build for reasons unrelated to this code. `cargo clippy -- -D warnings`
+  # below denies warnings for *our* crates, which is the intent.
+
+jobs:
+  rust:
+    name: Rust (engine, dataset, hosts)
+    # windows-latest matches the development target: the Tauri shell needs MSVC,
+    # and this is where the toolchain-specific issues recorded in
+    # docs/PACKAGING.md actually surface.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      # Formatting and lint run before tests: they are fast, and a failure here
+      # is unambiguous, so there is no point spending minutes on tests first.
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Excludes the Tauri shell: it needs system WebView/GTK libraries that add
+      # minutes of setup and test no engine logic (its commands are thin IPC
+      # wrappers). The engine, the shared dataset crate and the browser host —
+      # everything that computes — are all covered.
+      - name: cargo test --workspace
+        run: cargo test --workspace --exclude statelab
+
+  frontend:
+    name: Frontend (React + TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: npm run lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: npm test
+        run: npm test

@@ -49,6 +49,8 @@ pub use system::{
     VisualizationHints,
 };
 pub use systems::collatz::ClassicCollatz;
+pub use systems::five_n_plus_one::FiveNPlusOne;
+pub use systems::{is_known_system, run_by_id, run_by_id_cached, SystemInfo, AVAILABLE_SYSTEMS};
 pub use trajectory::{
     CycleInfo, ExecutionMetadata, Trajectory, TrajectoryStatus, TRAJECTORY_SCHEMA_VERSION,
 };

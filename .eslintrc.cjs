@@ -15,7 +15,22 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   parserOptions: { project: ['./tsconfig.json', './tsconfig.node.json'] },
   plugins: ['@typescript-eslint', 'react-hooks'],
-  ignorePatterns: ['dist', 'node_modules', '.eslintrc.cjs', 'src-tauri'],
+  // `target` matters: it holds Rust build output, including generated `.js` that
+  // ESLint would otherwise try to type-check against our tsconfig and fail on.
+  // The `*.config.js`/`*.mjs` entries are plain-JS tooling files that are
+  // deliberately outside the TypeScript projects.
+  ignorePatterns: [
+    'dist',
+    'dist-package',
+    'node_modules',
+    'target',
+    'coverage',
+    '.eslintrc.cjs',
+    'src-tauri',
+    '*.config.js',
+    '*.mjs',
+    'scripts',
+  ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'error',
     'react-hooks/rules-of-hooks': 'error',

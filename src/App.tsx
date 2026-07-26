@@ -7,8 +7,9 @@
  * immutable Trajectory it gets back — it computes nothing itself.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ResearchController } from '@/controllers/ResearchController';
+import { listSystems, type SystemDescriptor } from '@/lib/invoke';
 import type { Trajectory } from '@/types/trajectory';
 import { ValueChart } from '@/visualizations/value-chart/ValueChart';
 import { LogChart } from '@/visualizations/log-chart/LogChart';
@@ -38,6 +39,19 @@ export default function App(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [coralProgress, setCoralProgress] = useState<number | null>(null);
   const [coralError, setCoralError] = useState<string | null>(null);
+  // Systems come from the host's own registry, so the picker cannot drift from
+  // what the engine can actually run.
+  const [systems, setSystems] = useState<SystemDescriptor[]>([]);
+  const [systemId, setSystemId] = useState('classic-collatz');
+
+  useEffect(() => {
+    listSystems()
+      .then(setSystems)
+      .catch(() => {
+        // A host too old to expose /api/systems still runs Classic Collatz.
+        setSystems([{ id: 'classic-collatz', label: 'Classic Collatz (3n+1)' }]);
+      });
+  }, []);
 
   /**
    * Runs a contiguous range and appends it to the Coral overlay. Lives here, not
@@ -73,6 +87,7 @@ export default function App(): JSX.Element {
     setBusy(true);
     setError(null);
     try {
+      controller.setSystemId(systemId);
       const result = await controller.run(value.trim());
       setTrajectory(result);
       setCoralTrajectories((prev) => [...prev, result]);
@@ -94,6 +109,21 @@ export default function App(): JSX.Element {
 
       <main className="mx-auto max-w-4xl px-6 py-6">
         <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-wide text-slate-400">System</span>
+            <select
+              className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm outline-none focus:border-sky-500"
+              value={systemId}
+              onChange={(e) => setSystemId(e.target.value)}
+              data-testid="system-select"
+            >
+              {systems.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs uppercase tracking-wide text-slate-400">Initial state (n)</span>
             <input

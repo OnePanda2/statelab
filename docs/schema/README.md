@@ -44,10 +44,10 @@ Those two must be changed together.
 
 | Field | Type | Notes |
 |---|---|---|
-| `computation_duration_ms` | `number` | wall-clock duration of the run |
+| `computation_duration_ms` | `number` | wall-clock duration, rounded to microseconds so the field round-trips exactly through JSON (§7.4) |
 | `engine_version` | `string` | engine that produced it |
 | `cache_hit` | `boolean` | whether it was served from the memoization cache (§4.8) |
-| `iteration_limit_used` | `number` | the `max_iterations` bound in effect |
+| `iteration_limit_used` | `number` | the `max_iterations` bound in effect (default **10,000,000** — see PROJECT_BRIEF Addendum A.1) |
 | `timestamp` | `string` | RFC 3339 UTC |
 | `platform` | `string` | `<arch>-<os>` |
 
@@ -71,7 +71,7 @@ Computed exactly once, at trajectory-build time, by the system's Feature Extract
 | `binary_transition_statistics` | `{increases, decreases, same}` | consecutive bit-length deltas |
 | `run_length_statistics` | `number[]` | run lengths of identical parity bits |
 | `average_growth` | `number \| null` | mean `next/current` over odd transitions |
-| `average_decline` | `number \| null` | mean `next/current` over even transitions (exactly `0.5` for classic Collatz) |
+| `average_decline` | `number \| null` | mean `next/current` over even transitions (exactly `0.5` for classic Collatz, since every even step is an exact halving) — **disputed, see [OQ-1](../../OPEN_QUESTIONS.md)** |
 
 > **Documentation note.** The brief's prose says "14 metrics" while its §4.4 table
 > enumerates the **15** listed above. The table is the authoritative enumeration

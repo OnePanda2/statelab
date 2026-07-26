@@ -25,7 +25,7 @@ use std::net::{TcpListener, TcpStream};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
-use statelab_engine::{ClassicCollatz, EngineConfig, InitialStateInput, TrajectoryCache};
+use statelab_engine::{EngineConfig, InitialStateInput, TrajectoryCache};
 
 /// Process-wide memoization cache (§4.8), shared across connection threads. The
 /// Research Controller owns caching; the pure engine stays stateless.
@@ -136,12 +136,30 @@ fn handle(stream: TcpStream, cache: SharedCache) {
                 .or_else(|| query_param(query, "n"))
                 .unwrap_or_default();
             let max_iterations = query_param(query, "maxIterations").and_then(|v| v.parse().ok());
-            let response = run_engine(&initial_state, max_iterations, &cache);
+            // Defaults to Classic Collatz so existing callers keep working.
+            let system_id =
+                query_param(query, "systemId").unwrap_or_else(|| "classic-collatz".to_string());
+            let response = run_engine(&system_id, &initial_state, max_iterations, &cache);
             respond(
                 &stream,
                 "200 OK",
                 "application/json; charset=utf-8",
                 response.as_bytes(),
+            );
+        }
+        "/api/systems" => {
+            let body = serde_json::to_string(
+                &statelab_engine::AVAILABLE_SYSTEMS
+                    .iter()
+                    .map(|s| serde_json::json!({ "id": s.id, "label": s.label }))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap_or_else(|_| "[]".to_string());
+            respond(
+                &stream,
+                "200 OK",
+                "application/json; charset=utf-8",
+                body.as_bytes(),
             );
         }
         "/api/dataset" => stream_dataset_response(&stream, query, &body),
@@ -180,23 +198,34 @@ fn stream_dataset_response(mut stream: &TcpStream, query: &str, body: &str) {
 /// Runs the real engine for `initial_state` (through the memoization cache) and
 /// serializes the finalized Trajectory to JSON. Invalid input still yields a
 /// well-formed `SystemError` Trajectory (never a crash).
-fn run_engine(initial_state: &str, max_iterations: Option<u64>, cache: &SharedCache) -> String {
-    let system = ClassicCollatz;
+fn run_engine(
+    system_id: &str,
+    initial_state: &str,
+    max_iterations: Option<u64>,
+    cache: &SharedCache,
+) -> String {
     let config = match max_iterations {
         Some(max) => EngineConfig::with_max_iterations(max),
         None => EngineConfig::default(),
     };
     let input = InitialStateInput::new(initial_state);
     let trajectory = match cache.lock() {
-        Ok(mut guard) => guard.get_or_compute(&system, &input, &config),
+        Ok(mut guard) => statelab_engine::run_by_id_cached(system_id, &input, &config, &mut guard),
         // If a previous handler panicked while holding the lock, fall back to a
         // direct (uncached) run rather than failing the request.
-        Err(poisoned) => poisoned
-            .into_inner()
-            .get_or_compute(&system, &input, &config),
+        Err(poisoned) => statelab_engine::run_by_id_cached(
+            system_id,
+            &input,
+            &config,
+            &mut poisoned.into_inner(),
+        ),
     };
-    serde_json::to_string(&trajectory)
-        .unwrap_or_else(|e| format!("{{\"error\":\"serialization failed: {e}\"}}"))
+    match trajectory {
+        Some(t) => serde_json::to_string(&t)
+            .unwrap_or_else(|e| format!("{{\"error\":\"serialization failed: {e}\"}}")),
+        // Unknown ids are rejected, never silently substituted (Principle #4).
+        None => format!("{{\"error\":\"unknown system_id: {system_id}\"}}"),
+    }
 }
 
 /// Minimal `application/x-www-form-urlencoded` lookup with percent/`+` decoding.

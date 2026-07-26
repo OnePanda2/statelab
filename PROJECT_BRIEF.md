@@ -709,3 +709,87 @@ Every one of these fills a gap the frozen architecture deliberately left open. N
 7. Migration function trait shape (§4.9)
 8. Dataset Explorer streaming batch size: implementer-tunable (§7.7)
 9. Interpretation of the pipeline diagram as dependency-layering rather than strict runtime sequence (§2.1)
+
+---
+
+## ADDENDUM A — 2026-07-26 — Post-audit clarifications
+
+**This section is additive.** Nothing above it has been altered. It records
+decisions taken during the post-audit remediation pass, following the same
+superseding-addendum pattern the spec used across its own v1.1/1.2/1.3
+revisions.
+
+### A.1 Default iteration limit (clarifies §4.1)
+
+The frozen text never states a default `max_iterations`; 100,000 appears only
+inside *example* payloads in Appendix B and §6.4, which illustrate output shape
+rather than mandate a default.
+
+**Decision:** the default is **10,000,000** (IMPLEMENTATION DECISION, §4.1).
+The example payloads above remain valid as examples — they show an explicitly
+configured limit, not the default. Classic Collatz is unaffected in practice
+(it converges in hundreds of steps); the limit is only ever *reached* by
+non-converging runs, which is exactly where a larger budget is useful.
+
+### A.2 Every trajectory applies at least one transition (clarifies §4.1)
+
+The FROZEN Trajectory Generation Order checks convergence at **step 2**, after
+the transition at step 1. A system whose *initial* state already satisfies its
+own termination rule therefore cannot report that immediately: it transitions
+at least once first.
+
+For Classic Collatz this means `n = 1` yields `1 → 4 → 2 → 1`
+(`iteration_count = 3`), not a zero-iteration result. The same applies to 5n+1
+(Addendum A.4) and to any future system whose initial state can be a fixed
+point.
+
+**Decision:** this is **intentional and permanent**, not an accident of
+ordering. Stating it explicitly makes the ordering guarantee (§7.2 — convergence
+is checked before cycle detection) uniform, and avoids the awkward downstream
+edge case of a zero-iteration trajectory (empty parity sequence, null stopping
+time, a single-point chart).
+
+Recorded as OQ-2 in `OPEN_QUESTIONS.md`. The alternative — adding a "step 0"
+initial-state check — would change the frozen §4.1 order and remains available
+as a future, signed-off, versioned change. It has **not** been implemented.
+
+### A.3 Coral parameters beyond the frozen six (extends §5.5)
+
+§5.5 lists six parameters (Odd Angle, Even Angle, Line Length, Opacity, Scale,
+Rotation) plus the five Direction Rules. The following were added afterwards and
+are **additions, not reinterpretations** — every frozen parameter and rule
+behaves exactly as before:
+
+| Addition | Default | Backward compatibility |
+|---|---|---|
+| Line Width | `1.2` | Reproduces the previously hardcoded 1.2 (analytical) and 0.7 (aesthetic) exactly |
+| Odd/Even Color | `#f0883e` / `#3fb950` | The previously hardcoded constants |
+| Center Offset | `(0, 0)` | `(0,0)` is pixel-identical to the previous behaviour, enforced by test |
+| Animation Speed | `null` (instant) | Default is the original instant, single-pass render with no animation frame loop |
+| `aesthetic` Direction Rule | — | A sixth rule; the five frozen rules are untouched |
+
+### A.4 Second deterministic system: 5n+1 (exercises Principle #6)
+
+A second built-in system (`five-n-plus-one`: odd → `5n+1`, even → `n/2`,
+terminating at `state == 1`) was added to test Principle #6 against something
+real rather than a synthetic double.
+
+**Result: Principle #6 holds.** It required *zero* changes to `engine.rs`,
+`system.rs`, `trajectory.rs`, `cycle_detection.rs` or `cache.rs`. See
+`docs/AUDIT_REMEDIATION.md` for the evidence.
+
+Unlike Classic Collatz, 5n+1 reaches all three non-error terminal statuses
+(converges from n = 3, cycles from n = 13, appears to diverge from n = 7), so it
+is a materially better regression surface for the generic engine.
+
+### A.5 Unresolved: the `average_decline` formula
+
+An external audit reported that an addendum defines
+`Average Decline = mean(Current / Next)`, giving `2.0` for Classic Collatz.
+**No such addendum exists in this repository**, and §4.4 and Appendix B above
+both specify `next / current` and state the value is "always exactly 0.5".
+
+The implementation continues to match §4.4 and Appendix B. Changing it would
+make the code contradict the frozen text, which `Document 1.txt` §6 forbids.
+Recorded as **OQ-1** in `OPEN_QUESTIONS.md`, awaiting either the missing
+addendum or a decision to keep the current definition. **No code was changed.**

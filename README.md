@@ -82,6 +82,8 @@ producing installable desktop artifacts. StateLab ships as a native desktop app
 | [`docs/schema/README.md`](./docs/schema/README.md) | Trajectory schema v1.0.0, metrics, migration guide |
 | [`docs/PERFORMANCE.md`](./docs/PERFORMANCE.md) | Benchmark harness + recorded baseline |
 | [`docs/PACKAGING.md`](./docs/PACKAGING.md) | Both hosts, installers, and toolchain requirements |
+| [`docs/AUDIT_REMEDIATION.md`](./docs/AUDIT_REMEDIATION.md) | Post-audit pass: what changed, what was verified, which tests cover it |
+| [`OPEN_QUESTIONS.md`](./OPEN_QUESTIONS.md) | Decisions that need a human, with options and recommendations |
 
 **Two hosts, one UI build.** The desktop app (`src-tauri`, Tauri 2 + WebView2) is
 primary; [`crates/statelab-app`](./crates/statelab-app) is an alternative std-only
