@@ -126,11 +126,41 @@ merely silent. See `docs/AUDIT_REMEDIATION.md` → "Correction".
 
 ---
 
-## OQ-2 — Fixed-point-at-start: a system already satisfying its own termination rule — **OPEN**
+## OQ-2 — Fixed-point-at-start: a system already satisfying its own termination rule — **RESOLVED**
 
 **Raised:** 2026-07-26, during the post-audit remediation pass.
-**Blocks:** the audit's Task 4.
-**Nothing was changed.** `engine.rs`'s loop order is untouched.
+**Resolved:** 2026-07-26 — **option (b), signed off by the project owner.**
+
+### Resolution
+
+**"Every trajectory applies at least one transition" is now an intentional,
+permanent rule of the engine**, not an accidental consequence of the frozen §4.1
+generation order.
+
+- **No behaviour changed.** `engine.rs`'s loop order is untouched, and option (a)
+  (a "step 0" initial-state check) is **not** implemented and would still require
+  a fresh decision plus a spec addendum.
+- Documented in `PROJECT_BRIEF.md` Addendum A.2, with the sign-off recorded in
+  Addendum C.
+- **Pinned by test**, so the decision cannot be silently undone:
+  `engine_ordering.rs::a_system_starting_at_its_own_fixed_point_still_transitions`
+  uses a synthetic system whose initial state already satisfies its termination
+  rule, asserting it round-trips rather than reporting zero iterations. Prose
+  alone would not have survived a future refactor.
+
+Concrete consequences, unchanged and now deliberate:
+
+| System | Input | Result |
+|---|---|---|
+| Classic Collatz | n = 1 | `1 → 4 → 2 → 1`, `iteration_count = 3` |
+| 5n+1 | n = 1 | `1 → 6 → 3 → 16 → 8 → 4 → 2 → 1`, `iteration_count = 7` |
+
+The 5n+1 case is worth keeping in view: it independently confirmed this is a
+property of the **generic engine**, not a Collatz quirk.
+
+### Original report (retained for the record)
+
+`engine.rs`'s loop order was, and remains, untouched.
 
 ### The issue
 
@@ -177,18 +207,7 @@ and the `validation_dataset()` entry that documents the round trip.
 rule rather than an accidental consequence. Zero behaviour change; the existing
 tests and validation dataset stay valid.
 
-### Status of this question
-
-**Option (b) has been implemented as documentation only** — see the dated
-addendum appended to `PROJECT_BRIEF.md` and the note in `docs/schema/README.md`.
-This is the safe, reversible default: it changes no behaviour and does not
-foreclose option (a).
-
-**Option (a) has NOT been implemented and must not be without explicit sign-off
-recorded here.** If you want it, say so and this document will record the
-decision before any engine change is made.
-
-### Recommendation
+### Recommendation (as written at the time) — accepted
 
 **(b)**, on these grounds: the "always transition first" rule is what makes the
 ordering guarantee (§7.2 — convergence is checked before cycle detection) clean
@@ -196,3 +215,7 @@ and uniform, and a zero-iteration trajectory is a genuine edge case for
 downstream consumers (an empty parity sequence, a null stopping time, a chart
 with a single point). If the zero-iteration result is wanted later, option (a)
 remains available as an additive, versioned change.
+
+**Option (a) is still available.** Nothing in this resolution forecloses it — it
+would need a new decision, a spec addendum amending the frozen §4.1 order, and
+updates to the tests above and to both systems' validation datasets.

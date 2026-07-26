@@ -868,3 +868,48 @@ The following stand on their own merits, independent of the fabricated citation:
   `IterationLimitReached`. **Retained.**
 - CI, the verification test suites, and the trajectory-duration rounding fix —
   none of which depended on the audit's spec claims.
+
+---
+
+## ADDENDUM C — 2026-07-26 — OQ-2 signed off
+
+**This section is additive.** It records a decision, and changes no behaviour.
+
+### C.1 Fixed-point-at-start: option (b) accepted
+
+The project owner has signed off **option (b)** for OQ-2. Addendum A.2 stands, and
+is now a ratified decision rather than a proposal:
+
+> **Every trajectory applies at least one transition**, even when the initial
+> state already satisfies the system's own termination rule.
+
+This is a direct consequence of the FROZEN §4.1 generation order (step 1
+transitions, step 2 checks convergence) and is hereby **intentional and
+permanent**, not an accident of ordering.
+
+Concretely, and deliberately:
+
+| System | Input | Result |
+|---|---|---|
+| Classic Collatz | n = 1 | `1 → 4 → 2 → 1`, `iteration_count = 3` |
+| 5n+1 | n = 1 | `1 → 6 → 3 → 16 → 8 → 4 → 2 → 1`, `iteration_count = 7` |
+
+**No engine change was made.** `engine.rs`'s loop order is untouched, as it has
+been throughout.
+
+The rule is enforced by test, not prose alone —
+`engine_ordering.rs::a_system_starting_at_its_own_fixed_point_still_transitions`
+drives a synthetic system whose initial state already meets its termination
+condition and asserts the round trip. A future refactor that quietly introduced an
+initial-state check would fail that test rather than silently changing results.
+
+**Option (a)** — adding a "step 0" initial-state termination check, which would
+make Classic Collatz `n = 1` report `iteration_count = 0` — remains available but
+is **not** implemented. It would require a new decision, an addendum amending the
+frozen §4.1 order, and updates to the test above and to both systems' validation
+datasets.
+
+### C.2 Supersedes B.4's status note
+
+B.4 recorded "OQ-2 remains open". It is now **resolved**, per C.1. The remainder
+of B.4 is unaffected.

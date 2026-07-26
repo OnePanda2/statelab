@@ -192,6 +192,43 @@ fn termination_beats_cycle_on_the_same_step() {
     assert_eq!(t.iteration_count, 2);
 }
 
+/// OQ-2, resolved 2026-07-26 as option (b): **every trajectory applies at least
+/// one transition**, even when the initial state already satisfies the system's
+/// own termination rule.
+///
+/// This follows from the FROZEN §4.1 order — step 1 transitions, step 2 checks
+/// convergence — and is now an intentional, signed-off rule rather than an
+/// accidental consequence. See PROJECT_BRIEF Addendum A.2 / C and OPEN_QUESTIONS
+/// OQ-2.
+///
+/// `TerminationBeatsCycle` starting at 0 is exactly this case: 0 already meets
+/// its own termination condition, yet the engine must still go 0 -> 1 -> 0.
+/// Pinned by a test because prose does not survive a refactor: implementing
+/// option (a) (an initial-state "step 0" check) would make this fail, which is
+/// the intended alarm.
+#[test]
+fn a_system_starting_at_its_own_fixed_point_still_transitions() {
+    let config = EngineConfig::with_max_iterations(1_000);
+    let t = StateEvolutionEngine::run(
+        &TerminationBeatsCycle,
+        &InitialStateInput::new("0"),
+        &config,
+    );
+
+    assert_eq!(t.trajectory_status, TrajectoryStatus::Converged);
+    assert_ne!(
+        t.iteration_count, 0,
+        "a zero-iteration trajectory would mean the engine checked termination \
+         before transitioning, contradicting the FROZEN §4.1 order"
+    );
+    assert_eq!(t.iteration_count, 2, "0 -> 1 -> 0");
+    assert_eq!(t.state_sequence, ["0", "1", "0"]);
+    assert!(
+        t.state_sequence.len() > 1,
+        "the sequence must contain the round trip, not just the initial state"
+    );
+}
+
 #[test]
 fn iteration_limit_is_reported() {
     // Countdown from 100 with a limit of 10 can't reach 0 first.
