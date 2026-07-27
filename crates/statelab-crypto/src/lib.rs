@@ -28,6 +28,8 @@
 //! the T-function stream ciphers. These run as ordinary unit tests.
 
 pub mod avalanche;
+pub mod bench;
+pub mod generator;
 pub mod permutation;
 pub mod render;
 pub mod structural;
