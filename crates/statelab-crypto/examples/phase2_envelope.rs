@@ -6,21 +6,22 @@
 //! A benchmark table without its hardware context invites exactly the
 //! misreading that would make the numbers worse than useless.
 
-use statelab_crypto::bench::{measure, CpuFeatures};
+use statelab_crypto::bench::{calibrate_tsc_ghz, measure, CpuFeatures};
 use statelab_crypto::generator::{FastKeyErasureRng, ForwardSecureRng, NaiveRekeyRng};
 use statelab_crypto::systems::{ChaCha, KlimovShamir};
 use statelab_crypto::Permutation;
 use std::hint::black_box;
 
-/// Nominal clock, used only to cross-check the TSC against wall time.
-const NOMINAL_GHZ: f64 = 2.667;
-
 fn main() {
     let cpu = CpuFeatures::detect();
+    // Measured, never assumed. Hardcoding a clock corrupts cycles/byte on any
+    // machine but the one the constant was written for.
+    let tsc_ghz = calibrate_tsc_ghz();
 
     println!("=== StateLab Phase 2 — performance envelope ===\n");
     println!("-- Measurement environment --");
     println!("   features: {}", cpu.summary());
+    println!("   TSC rate: {tsc_ghz:.3} GHz (measured, NOT the core clock on a boosting CPU)");
     println!(
         "   AES-based designs measurable here (AEGIS/Rocca/Randen): {}",
         yes_no(cpu.can_measure_aes_designs())
@@ -60,7 +61,7 @@ fn main() {
         "chacha (1 round)",
         t.ticks_per_byte(),
         t.ns_per_byte(),
-        t.cycles_per_byte_from_wall(NOMINAL_GHZ)
+        t.cycles_per_byte_from_wall(tsc_ghz)
     );
 
     let t20 = measure("chacha-20round", state_bytes, 20_000, 9, || {
@@ -71,7 +72,7 @@ fn main() {
         "chacha (20 rounds)",
         t20.ticks_per_byte(),
         t20.ns_per_byte(),
-        t20.cycles_per_byte_from_wall(NOMINAL_GHZ)
+        t20.cycles_per_byte_from_wall(tsc_ghz)
     );
 
     let ks = KlimovShamir::default();
@@ -84,9 +85,15 @@ fn main() {
         "klimov-shamir (1 round)",
         tks.ticks_per_byte(),
         tks.ns_per_byte(),
-        tks.cycles_per_byte_from_wall(NOMINAL_GHZ)
+        tks.cycles_per_byte_from_wall(tsc_ghz)
     );
-    println!("   * cycles/byte derived from wall time at {NOMINAL_GHZ} GHz nominal.");
+    println!("   * cyc/byte = ns/byte x measured TSC rate ({tsc_ghz:.3} GHz).");
+    let skew = t.clock_disagreement(tsc_ghz);
+    println!(
+        "     TSC/wall disagreement {:.2}% — above a few percent invalidates",
+        skew * 100.0
+    );
+    println!("     the cyc/byte column; ns/byte stays valid regardless.");
 
     // ---- Why cost per round is the wrong metric on its own -----------------
     println!("\n-- Total cost = cycles/round x rounds-to-security --");
@@ -97,7 +104,7 @@ fn main() {
         "permutation", "cyc/byte/rd", "rounds needed", "total cyc/byte"
     );
 
-    let chacha_per_round = t.cycles_per_byte_from_wall(NOMINAL_GHZ);
+    let chacha_per_round = t.cycles_per_byte_from_wall(tsc_ghz);
     println!(
         "   {:<26} {:>12.3} {:>16} {:>14.2}",
         "chacha",
@@ -105,7 +112,7 @@ fn main() {
         "4 (ships 20)",
         chacha_per_round * 20.0
     );
-    let ks_per_round = tks.cycles_per_byte_from_wall(NOMINAL_GHZ);
+    let ks_per_round = tks.cycles_per_byte_from_wall(tsc_ghz);
     println!(
         "   {:<26} {:>12.3} {:>16} {:>14}",
         "klimov-shamir", ks_per_round, ">16 (unreached)", "unbounded"

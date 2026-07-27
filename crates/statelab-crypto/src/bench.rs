@@ -50,6 +50,20 @@ impl Timing {
     pub fn cycles_per_byte_from_wall(&self, ghz: f64) -> f64 {
         self.ns_per_byte() * ghz
     }
+
+    /// Relative disagreement between the TSC and the wall-derived cycle count.
+    ///
+    /// Zero when `ghz` is the TSC's true rate. Anything above a few percent
+    /// means the assumed clock is wrong and **every cycles/byte figure derived
+    /// from it is wrong with it** — the nanosecond figures remain valid.
+    pub fn clock_disagreement(&self, ghz: f64) -> f64 {
+        let ticks = self.ticks_per_byte();
+        let wall = self.cycles_per_byte_from_wall(ghz);
+        if ticks == 0.0 || !ticks.is_finite() || !wall.is_finite() {
+            return 0.0;
+        }
+        ((ticks - wall) / ticks).abs()
+    }
 }
 
 /// Reads the timestamp counter, or returns 0 where unavailable.
@@ -65,6 +79,33 @@ fn rdtsc() -> u64 {
     {
         0
     }
+}
+
+/// Measures the timestamp counter's frequency in GHz against the wall clock.
+///
+/// **Never assume a nominal clock.** An earlier version of the report drivers
+/// hardcoded 2.667 GHz — correct for the machine they were written on, and
+/// ~50% wrong on a modern boosting CPU, which silently corrupted every
+/// cycles-per-byte figure while leaving the nanosecond figures correct.
+///
+/// Note what this does and does not give you. On modern x86 the TSC is a
+/// *constant-rate* counter, usually pinned near the base clock, and it does
+/// **not** track the core's actual boost frequency. So this returns the TSC
+/// rate, which is reproducible and auditable, not the core clock. Cross-machine
+/// comparisons should be made on **ns/byte**; cycles/byte is only meaningful
+/// against a stated clock.
+pub fn calibrate_tsc_ghz() -> f64 {
+    // Long enough that timer granularity is irrelevant, short enough not to
+    // annoy anyone.
+    const WINDOW: std::time::Duration = std::time::Duration::from_millis(50);
+    let t0 = rdtsc();
+    let w0 = Instant::now();
+    while w0.elapsed() < WINDOW {
+        std::hint::spin_loop();
+    }
+    let elapsed = w0.elapsed();
+    let ticks = rdtsc().wrapping_sub(t0);
+    ticks as f64 / elapsed.as_nanos() as f64
 }
 
 /// Times `f`, run `iterations` times per repeat, reporting the median repeat.

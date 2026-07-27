@@ -11,7 +11,7 @@
 use statelab_crypto::avalanche::{
     avalanche_matrix, noise_floor, recommended_samples, rounds_to_avalanche,
 };
-use statelab_crypto::bench::{measure, CpuFeatures};
+use statelab_crypto::bench::{calibrate_tsc_ghz, measure, CpuFeatures};
 use statelab_crypto::render::matrix_to_png;
 use statelab_crypto::structural::{bijectivity, cycle_spectrum};
 use statelab_crypto::systems::{Counter, KlimovShamir, Lcg};
@@ -21,12 +21,15 @@ use std::hint::black_box;
 const SEED: u64 = 0x51A7E1AB;
 const TOLERANCE: f64 = 0.12;
 const MAX_ROUNDS: usize = 24;
-const NOMINAL_GHZ: f64 = 2.667;
 
 fn main() {
     let cpu = CpuFeatures::detect();
+    // Measured, never assumed. Recorded for provenance even though the cost
+    // column below is reported in nanoseconds, which needs no clock at all.
+    let tsc_ghz = calibrate_tsc_ghz();
     println!("=== StateLab baseline table (Gate 1 deliverable) ===\n");
     println!("   cpu features : {}", cpu.summary());
+    println!("   TSC rate     : {tsc_ghz:.3} GHz (measured)");
     println!("   seed         : {SEED:#x}");
     println!("   tolerance    : {TOLERANCE}");
     println!("   sweep        : 1..={MAX_ROUNDS} rounds");
@@ -81,7 +84,7 @@ fn main() {
     );
     println!(
         "   {:<26} {:>6} {:>9} {:>10} {:>11} {:>12} {:>11}",
-        "permutation", "state", "rounds", "dead", "mean dev", "cyc/B/round", "total cyc/B"
+        "permutation", "state", "rounds", "dead", "mean dev", "ns/B/round", "total ns/B"
     );
 
     let mut rows = Vec::new();
@@ -100,7 +103,7 @@ fn main() {
         let t = measure(*name, perm.state_bytes(), 100_000, 7, || {
             perm.round(black_box(&mut state), 0);
         });
-        let per_round = t.cycles_per_byte_from_wall(NOMINAL_GHZ);
+        let per_round = t.ns_per_byte();
 
         let total = match reached {
             Some(r) => format!("{:.2}", per_round * r as f64),
@@ -129,14 +132,14 @@ fn main() {
     // ---- The point of the table -------------------------------------------
     println!("\n-- Reading the table --");
     println!("   'rounds' is rounds to full avalanche, not the shipped round count.");
-    println!("   'total' = cyc/B/round x rounds-to-avalanche. A design that never");
+    println!("   'total' = ns/B/round x rounds-to-avalanche. A design that never");
     println!("   reaches avalanche has unbounded total cost however cheap its round is.");
     println!("\n   Cheapest round is not the best design:");
     let mut by_round = rows.clone();
     by_round.sort_by(|a, b| a.2.partial_cmp(&b.2).expect("no NaN"));
     for (name, reached, per_round) in by_round.iter().take(3) {
         println!(
-            "     {:<26} {:>7.3} cyc/B/round   avalanche: {}",
+            "     {:<26} {:>7.4} ns/B/round   avalanche: {}",
             name,
             per_round,
             match reached {
