@@ -4,7 +4,7 @@
 //!
 //! ```text
 //! statelab-stream --system chacha --rounds 20 | RNG_test stdin64
-//! statelab-stream --system counter --extract sha-ish   # negative control
+//! statelab-stream --system counter --extract strong | RNG_test stdin64
 //! ```
 //!
 //! ## The extraction trap
@@ -15,6 +15,12 @@
 //! honest measurement is of raw state. The other modes exist to run the three
 //! configurations the protocol requires (proposal §6.1 M2) — never to make a
 //! weak permutation look acceptable.
+//!
+//! The `strong` mode exists to *prove* that, not to flatter anything. Pairing
+//! it with `--system counter` reproduces SplitMix64 — a published, widely used
+//! generator whose state map is a bare counter and whose output passes every
+//! statistical battery. Same state evolution, opposite verdicts, decided
+//! entirely by the output function.
 
 use statelab_crypto::{permutation_by_name, Permutation, PERMUTATIONS};
 use std::io::{self, BufWriter, Write};
@@ -27,6 +33,18 @@ enum Extract {
     /// Configuration (b): low byte of each 8-byte lane. The sensitivity probe
     /// — low-bit weakness is classic and invisible in whole-word tests.
     LowByte,
+    /// Configuration (c): a strong finaliser over the counter, which is
+    /// exactly SplitMix64. Demonstrates that the batteries measure this
+    /// function and not the state map underneath it.
+    Strong,
+}
+
+/// The SplitMix64 finaliser — a strong 64-bit mixing function.
+#[inline]
+fn splitmix_finalise(mut z: u64) -> u64 {
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
 }
 
 struct Args {
@@ -42,7 +60,7 @@ fn usage() -> String {
     format!(
         "statelab-stream — raw byte stream from a StateLab permutation\n\
          \n\
-         USAGE:\n    statelab-stream [--system NAME] [--rounds N] [--extract raw|low-byte]\n\
+         USAGE:\n    statelab-stream [--system NAME] [--rounds N] [--extract raw|low-byte|strong]\n\
          \x20                   [--bytes N] [--seed N]\n\
          \n\
          SYSTEMS:\n    {}\n\
@@ -74,6 +92,7 @@ fn parse_args() -> Result<Args, String> {
                 a.extract = match value()?.as_str() {
                     "raw" => Extract::Raw,
                     "low-byte" => Extract::LowByte,
+                    "strong" => Extract::Strong,
                     other => return Err(format!("unknown --extract mode: {other}")),
                 }
             }
@@ -111,6 +130,19 @@ fn run(args: &Args, perm: &dyn Permutation, out: &mut impl Write) -> io::Result<
         match args.extract {
             Extract::Raw => emit.extend_from_slice(&state),
             Extract::LowByte => emit.extend(state.chunks_exact(8).map(|lane| lane[0])),
+            Extract::Strong => {
+                // SplitMix64: a counter fed through a strong finaliser. The
+                // permutation is bypassed entirely, which is the point.
+                //
+                // The counter advances by the golden gamma, not by 1. That is
+                // not decoration: consecutive integers differ in too few bits
+                // for the finaliser to separate them, and `finalise(n)` fails
+                // PractRand where `finalise(n·γ)` passes. The spacing of the
+                // input matters as much as the strength of the mixer.
+                const GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
+                let z = splitmix_finalise(args.seed.wrapping_add(block.wrapping_mul(GAMMA)));
+                emit.extend_from_slice(&z.to_le_bytes());
+            }
         }
 
         let slice = match args.limit {
