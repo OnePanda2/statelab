@@ -8,6 +8,7 @@ members = [
     "crates/statelab-engine",
     "crates/statelab-dataset",
     "crates/statelab-app",
+    "crates/statelab-crypto",
     "src-tauri",
 ]
 

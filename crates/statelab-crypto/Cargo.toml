@@ -1,0 +1,15 @@
+[package]
+name = "statelab-crypto"
+version = "0.1.0"
+description = "StateLab cryptographic measurement instrument: fixed-width permutations and the structural/diffusion batteries (RESEARCH_PROPOSAL_v2.1 Phase 1)."
+edition.workspace = true
+license.workspace = true
+
+# Deliberately ZERO dependencies. This crate measures primitives; pulling in a
+# crypto library would make it possible to accidentally measure the library
+# instead of the primitive under test (the extraction trap, proposal §6.1).
+[dependencies]
+
+[[bin]]
+name = "statelab-stream"
+path = "src/bin/statelab_stream.rs"
