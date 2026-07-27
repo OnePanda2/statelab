@@ -45,6 +45,10 @@ pub fn permutation_by_name(name: &str) -> Option<Box<dyn Permutation>> {
     match name {
         "counter" => Some(Box::new(systems::Counter::default())),
         "chacha" => Some(Box::new(systems::ChaCha)),
+        "ascon" => Some(Box::new(systems::Ascon)),
+        "xoshiro256++" => Some(Box::new(systems::Xoshiro256pp)),
+        "lcg" => Some(Box::new(systems::Lcg::default())),
+        "splitmix-lanes" => Some(Box::new(systems::SplitMixLanes::default())),
         "klimov-shamir" => Some(Box::new(systems::KlimovShamir::default())),
         "klimov-shamir-transposed" => Some(Box::new(systems::KlimovShamirTransposed::default())),
         _ => None,
@@ -55,6 +59,10 @@ pub fn permutation_by_name(name: &str) -> Option<Box<dyn Permutation>> {
 pub const PERMUTATIONS: &[&str] = &[
     "counter",
     "chacha",
+    "ascon",
+    "xoshiro256++",
+    "lcg",
+    "splitmix-lanes",
     "klimov-shamir",
     "klimov-shamir-transposed",
 ];
