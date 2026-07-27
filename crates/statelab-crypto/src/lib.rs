@@ -27,6 +27,7 @@
 //! and [`systems::KlimovShamir`] must show the triangular structure that killed
 //! the T-function stream ciphers. These run as ordinary unit tests.
 
+pub mod arx64;
 pub mod avalanche;
 pub mod bench;
 pub mod generator;
@@ -45,6 +46,8 @@ pub fn permutation_by_name(name: &str) -> Option<Box<dyn Permutation>> {
     match name {
         "counter" => Some(Box::new(systems::Counter::default())),
         "chacha" => Some(Box::new(systems::ChaCha)),
+        "chacha64" => Some(Box::new(arx64::CHACHA64)),
+        "blake2b" => Some(Box::new(arx64::BLAKE2B)),
         "ascon" => Some(Box::new(systems::Ascon)),
         "xoshiro256++" => Some(Box::new(systems::Xoshiro256pp)),
         "lcg" => Some(Box::new(systems::Lcg::default())),
@@ -59,6 +62,8 @@ pub fn permutation_by_name(name: &str) -> Option<Box<dyn Permutation>> {
 pub const PERMUTATIONS: &[&str] = &[
     "counter",
     "chacha",
+    "chacha64",
+    "blake2b",
     "ascon",
     "xoshiro256++",
     "lcg",
