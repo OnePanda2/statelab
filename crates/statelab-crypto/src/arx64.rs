@@ -25,6 +25,27 @@
 //!
 //! The G function and round structure here are validated by hashing against a
 //! published BLAKE2b-512 digest, not by inspection.
+//!
+//! # The measured advantage is scalar-only
+//!
+//! Phase A measured ~1.5x per byte for these 64-bit designs over ChaCha, at
+//! zero cost in rounds-to-avalanche. **That advantage does not survive
+//! vectorisation**, and ChaCha20 always ships vectorised.
+//!
+//! Under SIMD, bytes-per-instruction is set by *vector* width, not *word*
+//! width: `_mm_add_epi32` (4 x u32) and `_mm_add_epi64` (2 x u64) both process
+//! 16 bytes in one instruction, at the same throughput. The BLAKE3 team
+//! reached this conclusion and built BLAKE3 on BLAKE2s's 32-bit words rather
+//! than BLAKE2b's 64-bit words for exactly this reason.
+//!
+//! The idea also has direct prior art: Daniel Nager, *ChaCha related 64 bit
+//! oriented ARX cipher*, IACR ePrint 2024/103.
+//!
+//! What survives under SIMD is ~14%, and it comes from the rotation constants
+//! rather than the word width — vector ISAs have no rotate instruction, so a
+//! byte-aligned rotation is one `pshufb` while a non-aligned one costs
+//! shift + shift + or. See `PRIOR_ART_H4.md`. These designs are retained as
+//! measured baselines, not as proposals.
 
 use crate::permutation::Permutation;
 
