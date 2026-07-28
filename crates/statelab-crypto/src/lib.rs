@@ -28,6 +28,7 @@
 //! the T-function stream ciphers. These run as ordinary unit tests.
 
 pub mod arx64;
+pub mod arx_structure;
 pub mod avalanche;
 pub mod bench;
 pub mod generator;
@@ -48,6 +49,16 @@ pub fn permutation_by_name(name: &str) -> Option<Box<dyn Permutation>> {
         "counter" => Some(Box::new(systems::Counter::default())),
         "chacha" => Some(Box::new(systems::ChaCha)),
         "chacha64" => Some(Box::new(arx64::CHACHA64)),
+        "wide-cross" => Some(Box::new(arx_structure::ArxStructure::named(
+            arx_structure::QrShape::WideCross,
+            arx_structure::RoundPattern::Diagonal(1),
+            "wide-cross",
+        ))),
+        "wide-cross-d3" => Some(Box::new(arx_structure::ArxStructure::named(
+            arx_structure::QrShape::WideCross,
+            arx_structure::RoundPattern::Diagonal(3),
+            "wide-cross-d3",
+        ))),
         "blake2b" => Some(Box::new(arx64::BLAKE2B)),
         "ascon" => Some(Box::new(systems::Ascon)),
         "xoshiro256++" => Some(Box::new(systems::Xoshiro256pp)),
@@ -65,6 +76,8 @@ pub const PERMUTATIONS: &[&str] = &[
     "chacha",
     "chacha64",
     "blake2b",
+    "wide-cross",
+    "wide-cross-d3",
     "ascon",
     "xoshiro256++",
     "lcg",
