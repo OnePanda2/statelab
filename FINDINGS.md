@@ -16,7 +16,7 @@ ChaCha's quarter round takes four 32-bit words and mixes them through a sequence
 x1 = (x1 XOR x2) <<< l
 ```
 
-where `l` is the fourth of four rotation constants (ChaCha's own values are 16, 12, 8, 7). The 2016 paper generates a diffusion matrix for each candidate set of four constants — measuring, across many single-bit input flips, how many output bits change — and scores each matrix by its mean and standard deviation. Lower/tighter values are treated as "better diffusion." Searching all 32⁴ = 1,048,576 combinations of the four constants, the paper reports 58,000+ combinations beating ChaCha's own, and proposes MCC with constants [4, 17, 8, 0].
+where `l` is the fourth of four rotation constants (ChaCha's own values are 16, 12, 8, 7). The 2016 paper generates a diffusion matrix for each candidate set of four constants — measuring, across many single-bit input flips, how many output bits change — and scores each matrix by its mean and standard deviation. A *higher* mean with a *lower* standard deviation is treated as "better diffusion" — the paper's own wording is that a better set gives a mean that "is higher and standard deviation is lower than" ChaCha's. Searching all 32⁴ = 1,048,576 combinations of the four constants, the paper reports 58,000+ combinations beating ChaCha's own, and proposes MCC with constants [4, 17, 8, 0].
 
 ## Reproduction
 
@@ -34,8 +34,10 @@ We verified this directly: fixing the first three rotation constants and sweepin
 
 The paper's search reports scoring 32⁴ combinations, but as far as this specific metric can tell, there are only 32³ *distinguishable* outcomes — the fourth dimension of the search doesn't move the score at all. Two consequences follow:
 
-1. **The "58,000+ better combinations" figure is real, but overcounts** — each distinguishable result is being counted 32 times over (once per value of `l`), since all 32 look identical to the metric.
-2. **This plausibly explains MCC's choice of `l = 0`.** A metric that can't see `l` has no basis to prefer any value of it, so setting `l = 0` "costs" nothing on this particular measure — even though `l` is not inert everywhere. In our own testing, fixing the other three constants at MCC's values ([15, 24, 19, *]) and varying `l` under a bit-level avalanche test (a different measurement than the paper's diffusion matrix) changed rounds-to-full-avalanche for 14 of the 32 values — a property this diffusion metric cannot detect at all.
+1. **The "58,000+ better combinations" figure is real, but each distinguishable result appears 32 times in it** — once per value of `l`, since all 32 look identical to the metric. Our own count is exactly divisible by 32 (90,112 = 2,816 × 32), which is what the invariance predicts and is independent arithmetic confirmation of it.
+2. **The paper's own headline result names a constant the metric cannot determine.** Section 5.2 reports that "the rotation constants that generate the diffusion matrix with the highest mean is **[14, 24, 19, 11]**", with mean 7.0599 and standard deviation 3.5353. But `l = 11` is one of 32 tied values — under our implementation of their metric, all 32 of [14, 24, 19, `l`] produce an identical mean. The fourth constant of the paper's *maximum-diffusion* result is therefore not selected by the measurement that reports it. (Our own sweep independently landed on [15, 24, 19, \*] at mean 6.9698, against [14, 24, 19, \*] at 6.9667 — 0.04% apart, i.e. tied within noise, which is why the two searches differ in the first constant.)
+
+3. **This plausibly explains MCC's choice of `l = 0`.** A metric that can't see `l` has no basis to prefer any value of it, so setting `l = 0` "costs" nothing on this particular measure — even though `l` is not inert everywhere. In our own testing, fixing the other three constants at the top-scoring set our own sweep found ([15, 24, 19, *] — *not* MCC's, which are [4, 17, 8, 0]) and varying `l` under a bit-level avalanche test (a different measurement than the paper's diffusion matrix) changed rounds-to-full-avalanche for 14 of the 32 values — a property this diffusion metric cannot detect at all.
 
 ## What we're not claiming
 
