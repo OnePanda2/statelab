@@ -48,11 +48,17 @@ fn splitmix_finalise(mut z: u64) -> u64 {
 }
 
 struct Args {
-    /// Fill the non-counter part of the state with key-like material instead
-    /// of zeros. A zero-heavy input is an unusually easy case for a
-    /// reduced-round permutation, so a defect visible only with zeros is a
-    /// property of the framing, not of the design.
-    keyed: bool,
+    /// Fraction of the state, beyond the 16 seed+counter bytes, that is
+    /// zeroed rather than keyed. `0.0` is fully keyed; `1.0` is the original
+    /// `seed || counter || zeros` construction.
+    ///
+    /// A dial rather than a switch, for two reasons. It turns "is this design
+    /// sensitive to low-entropy input" from a yes/no into a dose-response
+    /// curve, and — because it is a *fraction* — it makes designs with
+    /// different state sizes comparable. Zeroing "everything but the counter"
+    /// hands a 128-byte state 87.5% zeros against a 64-byte state's 75%, which
+    /// is a harder input, not a weaker design.
+    zero_frac: f64,
     system: String,
     rounds: usize,
     extract: Extract,
@@ -66,7 +72,8 @@ fn usage() -> String {
         "statelab-stream — raw byte stream from a StateLab permutation\n\
          \n\
          USAGE:\n    statelab-stream [--system NAME] [--rounds N] [--extract raw|low-byte|strong]\n\
-         \x20                   [--bytes N] [--seed N] [--keyed]\n\
+         \x20                   [--bytes N] [--seed N]
+                    [--keyed | --zero-frac F]\n\
          \n\
          SYSTEMS:\n    {}\n\
          \n\
@@ -78,7 +85,7 @@ fn usage() -> String {
 
 fn parse_args() -> Result<Args, String> {
     let mut a = Args {
-        keyed: false,
+        zero_frac: 1.0,
         system: "chacha".to_string(),
         rounds: 0, // 0 means "use the design's default"
         extract: Extract::Raw,
@@ -90,7 +97,15 @@ fn parse_args() -> Result<Args, String> {
         let mut value = || it.next().ok_or_else(|| format!("{flag} needs a value"));
         match flag.as_str() {
             "-h" | "--help" => return Err(usage()),
-            "--keyed" => a.keyed = true,
+            "--keyed" => a.zero_frac = 0.0,
+            "--zero-frac" => {
+                a.zero_frac = value()?
+                    .parse::<f64>()
+                    .map_err(|_| "--zero-frac must be a number in [0,1]")?;
+                if !(0.0..=1.0).contains(&a.zero_frac) {
+                    return Err("--zero-frac must be in [0,1]".to_string());
+                }
+            }
             "--system" => a.system = value()?,
             "--rounds" => a.rounds = value()?.parse().map_err(|_| "--rounds must be a number")?,
             "--bytes" => a.limit = Some(value()?.parse().map_err(|_| "--bytes must be a number")?),
@@ -128,21 +143,20 @@ fn run(args: &Args, perm: &dyn Permutation, out: &mut impl Write) -> io::Result<
     loop {
         // Fresh state per block, so the permutation is measured rather than
         // whatever feedback chain we might otherwise have invented.
-        if args.keyed {
-            // splitmix64 over a fixed key schedule: deterministic, and not a
-            // block of zeros.
-            let mut z = args.seed ^ 0x243F_6A88_85A3_08D3;
-            for lane in state.chunks_exact_mut(8) {
-                z = z.wrapping_add(0x9E37_79B9_7F4A_7C15);
-                let mut v = z;
-                v = (v ^ (v >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-                v = (v ^ (v >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-                lane.copy_from_slice(&(v ^ (v >> 31)).to_le_bytes());
-            }
-        } else {
-            state.iter_mut().for_each(|b| *b = 0);
-            state[..8].copy_from_slice(&args.seed.to_le_bytes());
+        // Fill everything with key material, then zero the tail according to
+        // zero_frac. Bytes 0..16 always hold seed and counter.
+        let mut z = args.seed ^ 0x243F_6A88_85A3_08D3;
+        for lane in state.chunks_exact_mut(8) {
+            z = z.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut v = z;
+            v = (v ^ (v >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            v = (v ^ (v >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            lane.copy_from_slice(&(v ^ (v >> 31)).to_le_bytes());
         }
+        let tail = n.saturating_sub(16);
+        let zeroed = (args.zero_frac * tail as f64).round() as usize;
+        state[n - zeroed..].iter_mut().for_each(|b| *b = 0);
+        state[..8].copy_from_slice(&args.seed.to_le_bytes());
         state[8..16].copy_from_slice(&block.to_le_bytes());
         perm.permute(&mut state, rounds);
 
