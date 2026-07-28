@@ -32,6 +32,7 @@ pub mod avalanche;
 pub mod bench;
 pub mod generator;
 pub mod permutation;
+pub mod qr_diffusion;
 pub mod render;
 pub mod structural;
 pub mod systems;
