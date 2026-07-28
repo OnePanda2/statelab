@@ -49,6 +49,15 @@ pub fn permutation_by_name(name: &str) -> Option<Box<dyn Permutation>> {
         "counter" => Some(Box::new(systems::Counter::default())),
         "chacha" => Some(Box::new(systems::ChaCha)),
         "chacha64" => Some(Box::new(arx64::CHACHA64)),
+        // Same permutation as "chacha", but routed through the generic
+        // ArxStructure path. Exists so cost can be compared like-for-like:
+        // the hand-written and generic implementations differ by ~2.5x in
+        // ns/byte, which has nothing to do with the design.
+        "chacha-generic" => Some(Box::new(arx_structure::ArxStructure::named(
+            arx_structure::QrShape::DoubleCross,
+            arx_structure::RoundPattern::Diagonal(1),
+            "chacha-generic",
+        ))),
         "wide-cross" => Some(Box::new(arx_structure::ArxStructure::named(
             arx_structure::QrShape::WideCross,
             arx_structure::RoundPattern::Diagonal(1),
@@ -76,6 +85,7 @@ pub const PERMUTATIONS: &[&str] = &[
     "chacha",
     "chacha64",
     "blake2b",
+    "chacha-generic",
     "wide-cross",
     "wide-cross-d3",
     "ascon",
