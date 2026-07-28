@@ -48,6 +48,11 @@ fn splitmix_finalise(mut z: u64) -> u64 {
 }
 
 struct Args {
+    /// Fill the non-counter part of the state with key-like material instead
+    /// of zeros. A zero-heavy input is an unusually easy case for a
+    /// reduced-round permutation, so a defect visible only with zeros is a
+    /// property of the framing, not of the design.
+    keyed: bool,
     system: String,
     rounds: usize,
     extract: Extract,
@@ -61,7 +66,7 @@ fn usage() -> String {
         "statelab-stream — raw byte stream from a StateLab permutation\n\
          \n\
          USAGE:\n    statelab-stream [--system NAME] [--rounds N] [--extract raw|low-byte|strong]\n\
-         \x20                   [--bytes N] [--seed N]\n\
+         \x20                   [--bytes N] [--seed N] [--keyed]\n\
          \n\
          SYSTEMS:\n    {}\n\
          \n\
@@ -73,6 +78,7 @@ fn usage() -> String {
 
 fn parse_args() -> Result<Args, String> {
     let mut a = Args {
+        keyed: false,
         system: "chacha".to_string(),
         rounds: 0, // 0 means "use the design's default"
         extract: Extract::Raw,
@@ -84,6 +90,7 @@ fn parse_args() -> Result<Args, String> {
         let mut value = || it.next().ok_or_else(|| format!("{flag} needs a value"));
         match flag.as_str() {
             "-h" | "--help" => return Err(usage()),
+            "--keyed" => a.keyed = true,
             "--system" => a.system = value()?,
             "--rounds" => a.rounds = value()?.parse().map_err(|_| "--rounds must be a number")?,
             "--bytes" => a.limit = Some(value()?.parse().map_err(|_| "--bytes must be a number")?),
@@ -121,8 +128,21 @@ fn run(args: &Args, perm: &dyn Permutation, out: &mut impl Write) -> io::Result<
     loop {
         // Fresh state per block, so the permutation is measured rather than
         // whatever feedback chain we might otherwise have invented.
-        state.iter_mut().for_each(|b| *b = 0);
-        state[..8].copy_from_slice(&args.seed.to_le_bytes());
+        if args.keyed {
+            // splitmix64 over a fixed key schedule: deterministic, and not a
+            // block of zeros.
+            let mut z = args.seed ^ 0x243F_6A88_85A3_08D3;
+            for lane in state.chunks_exact_mut(8) {
+                z = z.wrapping_add(0x9E37_79B9_7F4A_7C15);
+                let mut v = z;
+                v = (v ^ (v >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+                v = (v ^ (v >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+                lane.copy_from_slice(&(v ^ (v >> 31)).to_le_bytes());
+            }
+        } else {
+            state.iter_mut().for_each(|b| *b = 0);
+            state[..8].copy_from_slice(&args.seed.to_le_bytes());
+        }
         state[8..16].copy_from_slice(&block.to_le_bytes());
         perm.permute(&mut state, rounds);
 
