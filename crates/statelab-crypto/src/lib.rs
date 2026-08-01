@@ -31,14 +31,17 @@ pub mod arx64;
 pub mod arx_structure;
 pub mod avalanche;
 pub mod bench;
+pub mod correlation;
 pub mod generator;
 pub mod permutation;
 pub mod qr_diffusion;
 pub mod render;
+pub mod stream;
 pub mod structural;
 pub mod systems;
 
 pub use permutation::{Permutation, SmallMap};
+pub use stream::{Extract, StreamConfig};
 
 /// Resolves a permutation by name, for binaries and report drivers.
 ///

@@ -132,10 +132,20 @@ pub fn noise_floor(samples: usize, cells: usize) -> f64 {
 /// permutation fail about half the time. Doubling the sample count puts the
 /// floor at `tolerance/√2` and leaves room for that fluctuation.
 pub fn recommended_samples(bits: usize, tolerance: f64) -> usize {
+    samples_for_cells(bits * bits, tolerance)
+}
+
+/// [`recommended_samples`] for a grid that is not square.
+///
+/// The seed-correlation battery (§6.4 N1–N4) builds grids of seed-pairs × bits
+/// and lags × bits, which have the same max-of-many-noisy-estimates problem and
+/// must not solve it a second, subtly different way. One inversion, both
+/// callers — the same reasoning that moved the stream construction into
+/// [`crate::stream`].
+pub fn samples_for_cells(cells: usize, tolerance: f64) -> usize {
     assert!(tolerance > 0.0, "tolerance must be positive");
     const SAFETY: f64 = 2.0;
-    let cells = (bits * bits).max(2) as f64;
-    let spread = (2.0 * cells.ln()).sqrt();
+    let spread = (2.0 * (cells.max(2) as f64).ln()).sqrt();
     ((0.5 * spread / tolerance).powi(2) * SAFETY).ceil() as usize
 }
 
@@ -307,6 +317,24 @@ mod tests {
         // recommended_samples inverts it.
         let n = recommended_samples(512, 0.10);
         assert!(noise_floor(n, 512 * 512) <= 0.10);
+    }
+
+    /// `recommended_samples` became a thin wrapper when the correlation battery
+    /// needed the non-square case. Pinned so the delegation stays exact rather
+    /// than drifting into two nearly-identical formulas.
+    #[test]
+    fn recommended_samples_is_the_square_case_of_samples_for_cells() {
+        for bits in [64usize, 320, 512, 1024] {
+            for tol in [0.05, 0.10, 0.12] {
+                assert_eq!(
+                    recommended_samples(bits, tol),
+                    samples_for_cells(bits * bits, tol)
+                );
+            }
+        }
+        // And the non-square case still inverts the floor it came from.
+        let n = samples_for_cells(66 * 512, 0.12);
+        assert!(noise_floor(n, 66 * 512) <= 0.12);
     }
 
     /// The graveyard's central lesson, measured rather than asserted: a

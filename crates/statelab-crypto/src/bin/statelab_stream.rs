@@ -5,6 +5,7 @@
 //! ```text
 //! statelab-stream --system chacha --rounds 20 | RNG_test stdin64
 //! statelab-stream --system counter --extract strong | RNG_test stdin64
+//! statelab-stream --system chacha --interleave 8 | RNG_test stdin64
 //! ```
 //!
 //! ## The extraction trap
@@ -21,50 +22,27 @@
 //! generator whose state map is a bare counter and whose output passes every
 //! statistical battery. Same state evolution, opposite verdicts, decided
 //! entirely by the output function.
+//!
+//! ## Where the construction lives
+//!
+//! In [`statelab_crypto::stream`], not here. The seed-correlation battery needs
+//! to measure the object this binary emits, and a second implementation would
+//! eventually differ from this one by some detail nobody noticed — producing a
+//! disagreement between the internal and external batteries that looked like a
+//! finding and was really a bug.
 
+use statelab_crypto::stream::{emit_block, Extract, StreamConfig};
 use statelab_crypto::{permutation_by_name, Permutation, PERMUTATIONS};
 use std::io::{self, BufWriter, Write};
 
-/// What gets written to stdout.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Extract {
-    /// Configuration (a): raw state. The honest measurement.
-    Raw,
-    /// Configuration (b): low byte of each 8-byte lane. The sensitivity probe
-    /// — low-bit weakness is classic and invisible in whole-word tests.
-    LowByte,
-    /// Configuration (c): a strong finaliser over the counter, which is
-    /// exactly SplitMix64. Demonstrates that the batteries measure this
-    /// function and not the state map underneath it.
-    Strong,
-}
-
-/// The SplitMix64 finaliser — a strong 64-bit mixing function.
-#[inline]
-fn splitmix_finalise(mut z: u64) -> u64 {
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 struct Args {
-    /// Fraction of the state, beyond the 16 seed+counter bytes, that is
-    /// zeroed rather than keyed. `0.0` is fully keyed; `1.0` is the original
-    /// `seed || counter || zeros` construction.
-    ///
-    /// A dial rather than a switch, for two reasons. It turns "is this design
-    /// sensitive to low-entropy input" from a yes/no into a dose-response
-    /// curve, and — because it is a *fraction* — it makes designs with
-    /// different state sizes comparable. Zeroing "everything but the counter"
-    /// hands a 128-byte state 87.5% zeros against a 64-byte state's 75%, which
-    /// is a harder input, not a weaker design.
-    zero_frac: f64,
+    cfg: StreamConfig,
     system: String,
-    rounds: usize,
-    extract: Extract,
     /// Bytes to emit, or `None` to stream until the pipe closes.
     limit: Option<u64>,
-    seed: u64,
+    /// Emit blocks round-robin from this many consecutive seeds, for §6.4 N2.
+    /// `1` is the ordinary single-stream case.
+    interleave: u64,
 }
 
 fn usage() -> String {
@@ -72,51 +50,70 @@ fn usage() -> String {
         "statelab-stream — raw byte stream from a StateLab permutation\n\
          \n\
          USAGE:\n    statelab-stream [--system NAME] [--rounds N] [--extract raw|low-byte|strong]\n\
-         \x20                   [--bytes N] [--seed N]
-                    [--keyed | --zero-frac F]\n\
+         \x20                   [--bytes N] [--seed N] [--interleave N] [--bit-reverse]\n\
+         \x20                   [--keyed | --zero-frac F]\n\
          \n\
          SYSTEMS:\n    {}\n\
          \n\
          NOTE: --extract defaults to `raw` on purpose. Statistical tests run\n\
-         over a strong extraction measure the extractor, not the permutation.\n",
+         over a strong extraction measure the extractor, not the permutation.\n\
+         \n\
+         NOTE: --zero-frac defaults to 1.0, the `seed || counter || zeros`\n\
+         construction the earlier reports used. Pass --keyed for the realistic\n\
+         fully-keyed input. The default is kept only so previously recorded\n\
+         results keep describing this binary.\n",
         PERMUTATIONS.join(", ")
     )
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut a = Args {
-        zero_frac: 1.0,
+        cfg: StreamConfig {
+            seed: 0,
+            rounds: 0, // 0 means "use the design's default"
+            extract: Extract::Raw,
+            // NOT StreamConfig::default(), which is 0.0. Changing this would
+            // silently reinterpret every PractRand result already recorded.
+            zero_frac: 1.0,
+            bit_reverse: false,
+        },
         system: "chacha".to_string(),
-        rounds: 0, // 0 means "use the design's default"
-        extract: Extract::Raw,
         limit: None,
-        seed: 0,
+        interleave: 1,
     };
     let mut it = std::env::args().skip(1);
     while let Some(flag) = it.next() {
         let mut value = || it.next().ok_or_else(|| format!("{flag} needs a value"));
         match flag.as_str() {
             "-h" | "--help" => return Err(usage()),
-            "--keyed" => a.zero_frac = 0.0,
+            "--keyed" => a.cfg.zero_frac = 0.0,
+            "--bit-reverse" => a.cfg.bit_reverse = true,
             "--zero-frac" => {
-                a.zero_frac = value()?
+                a.cfg.zero_frac = value()?
                     .parse::<f64>()
                     .map_err(|_| "--zero-frac must be a number in [0,1]")?;
-                if !(0.0..=1.0).contains(&a.zero_frac) {
+                if !(0.0..=1.0).contains(&a.cfg.zero_frac) {
                     return Err("--zero-frac must be in [0,1]".to_string());
                 }
             }
             "--system" => a.system = value()?,
-            "--rounds" => a.rounds = value()?.parse().map_err(|_| "--rounds must be a number")?,
+            "--rounds" => {
+                a.cfg.rounds = value()?.parse().map_err(|_| "--rounds must be a number")?
+            }
             "--bytes" => a.limit = Some(value()?.parse().map_err(|_| "--bytes must be a number")?),
-            "--seed" => a.seed = value()?.parse().map_err(|_| "--seed must be a number")?,
-            "--extract" => {
-                a.extract = match value()?.as_str() {
-                    "raw" => Extract::Raw,
-                    "low-byte" => Extract::LowByte,
-                    "strong" => Extract::Strong,
-                    other => return Err(format!("unknown --extract mode: {other}")),
+            "--seed" => a.cfg.seed = value()?.parse().map_err(|_| "--seed must be a number")?,
+            "--interleave" => {
+                a.interleave = value()?
+                    .parse()
+                    .map_err(|_| "--interleave must be a number")?;
+                if a.interleave == 0 {
+                    return Err("--interleave must be at least 1".to_string());
                 }
+            }
+            "--extract" => {
+                let raw = value()?;
+                a.cfg.extract = Extract::parse(&raw)
+                    .ok_or_else(|| format!("unknown --extract mode: {raw}"))?;
             }
             other => return Err(format!("unknown flag: {other}\n\n{}", usage())),
         }
@@ -124,60 +121,24 @@ fn parse_args() -> Result<Args, String> {
     Ok(a)
 }
 
-/// Counter mode: the state is `seed || block_counter`, permuted per block. The
-/// simplest construction that turns a permutation into a stream without adding
-/// mixing of its own — anything cleverer would contaminate the measurement.
+/// Emits blocks until the limit or a closed pipe.
+///
+/// With `--interleave n`, block *b* is taken from seed `seed + (b mod n)` and
+/// block index `b / n`, so `n` independent streams are woven round-robin. That
+/// is the N2 construction: seed-lattice structure is invisible when each stream
+/// is tested alone and appears here as short-lag correlation.
 fn run(args: &Args, perm: &dyn Permutation, out: &mut impl Write) -> io::Result<()> {
-    let n = perm.state_bytes();
-    let rounds = if args.rounds == 0 {
-        perm.default_rounds()
-    } else {
-        args.rounds
-    };
-
     let mut written: u64 = 0;
-    let mut block: u64 = 0;
-    let mut state = vec![0u8; n];
-    let mut emit = Vec::with_capacity(n);
+    let mut index: u64 = 0;
+    let mut scratch = vec![0u8; perm.state_bytes()];
+    let mut emit = Vec::with_capacity(perm.state_bytes());
 
     loop {
-        // Fresh state per block, so the permutation is measured rather than
-        // whatever feedback chain we might otherwise have invented.
-        // Fill everything with key material, then zero the tail according to
-        // zero_frac. Bytes 0..16 always hold seed and counter.
-        let mut z = args.seed ^ 0x243F_6A88_85A3_08D3;
-        for lane in state.chunks_exact_mut(8) {
-            z = z.wrapping_add(0x9E37_79B9_7F4A_7C15);
-            let mut v = z;
-            v = (v ^ (v >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-            v = (v ^ (v >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-            lane.copy_from_slice(&(v ^ (v >> 31)).to_le_bytes());
-        }
-        let tail = n.saturating_sub(16);
-        let zeroed = (args.zero_frac * tail as f64).round() as usize;
-        state[n - zeroed..].iter_mut().for_each(|b| *b = 0);
-        state[..8].copy_from_slice(&args.seed.to_le_bytes());
-        state[8..16].copy_from_slice(&block.to_le_bytes());
-        perm.permute(&mut state, rounds);
-
-        emit.clear();
-        match args.extract {
-            Extract::Raw => emit.extend_from_slice(&state),
-            Extract::LowByte => emit.extend(state.chunks_exact(8).map(|lane| lane[0])),
-            Extract::Strong => {
-                // SplitMix64: a counter fed through a strong finaliser. The
-                // permutation is bypassed entirely, which is the point.
-                //
-                // The counter advances by the golden gamma, not by 1. That is
-                // not decoration: consecutive integers differ in too few bits
-                // for the finaliser to separate them, and `finalise(n)` fails
-                // PractRand where `finalise(n·γ)` passes. The spacing of the
-                // input matters as much as the strength of the mixer.
-                const GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
-                let z = splitmix_finalise(args.seed.wrapping_add(block.wrapping_mul(GAMMA)));
-                emit.extend_from_slice(&z.to_le_bytes());
-            }
-        }
+        let cfg = StreamConfig {
+            seed: args.cfg.seed.wrapping_add(index % args.interleave),
+            ..args.cfg
+        };
+        emit_block(perm, &cfg, index / args.interleave, &mut scratch, &mut emit);
 
         let slice = match args.limit {
             Some(limit) if written + emit.len() as u64 > limit => {
@@ -200,7 +161,7 @@ fn run(args: &Args, perm: &dyn Permutation, out: &mut impl Write) -> io::Result<
         if args.limit.is_some_and(|l| written >= l) {
             return out.flush();
         }
-        block = block.wrapping_add(1);
+        index = index.wrapping_add(1);
     }
 }
 
