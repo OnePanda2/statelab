@@ -111,8 +111,35 @@ pub fn calibrate_tsc_ghz() -> f64 {
 /// Times `f`, run `iterations` times per repeat, reporting the median repeat.
 ///
 /// The median rather than the mean, because scheduler preemption produces
-/// occasional enormous outliers that would dominate an average. `black_box`
-/// wraps the result so the optimiser cannot delete the work being measured.
+/// occasional enormous outliers that would dominate an average.
+///
+/// # `f` must do work the optimiser cannot fold — `black_box` is not enough
+///
+/// `black_box(f())` forces the *result* to be materialised. It does **not**
+/// force the work to happen. If `f`'s body has a closed form, or is pure and
+/// capture-free, the optimiser is entitled to compute it once — or to collapse
+/// it algebraically — and this function will faithfully report how long that
+/// took, which is nearly zero.
+///
+/// This is not a hypothetical. The self-check below previously timed 4 versus
+/// 64 iterations of `x = x·K + 1` and read *identical* times under `--release`
+/// while passing in debug. Nothing was wrong with the harness: that recurrence
+/// is an affine map, `xₙ = Kⁿ·x₀ + Σ Kⁱ`, whose coefficients are compile-time
+/// constants. LLVM strength-reduced both arms to a single multiply-add, so both
+/// arms genuinely were the same amount of work. Capturing mutable state does
+/// not help either — the closed form still applies.
+///
+/// **What does work**, and what every driver here already does: have `f` write
+/// through a buffer escaped by `black_box`, running a function with no
+/// algebraic shortcut.
+///
+/// ```ignore
+/// measure("chacha", 64, 100_000, 7, || perm.round(black_box(&mut state), 0));
+/// ```
+///
+/// A benchmark that silently measures nothing is the failure this module exists
+/// to prevent, so the constraint is stated here rather than left to be
+/// rediscovered.
 pub fn measure<F, R>(
     name: impl Into<String>,
     bytes_per_iter: usize,
@@ -235,6 +262,8 @@ impl CpuFeatures {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::systems::ChaCha;
+    use crate::Permutation;
 
     #[test]
     fn measure_reports_the_requested_shape() {
@@ -252,27 +281,65 @@ mod tests {
         assert!(t.ns_per_byte().is_nan());
     }
 
+    /// The harness must recover a known work ratio, or it is measuring nothing.
+    ///
+    /// ChaCha at 1 round against 16, rather than a loop of multiply-adds. The
+    /// earlier version compared 4 to 64 iterations of `x = x·K + 1` and failed
+    /// under `--release` while passing in debug — the worst way for a self-check
+    /// to behave, because CI runs debug and never saw it. The fault was in the
+    /// test: that recurrence has a closed form and both arms compiled to one
+    /// multiply-add. See [`measure`]'s note.
+    ///
+    /// A real permutation over an escaped buffer has no algebraic shortcut.
+    /// Measured ratio: 16.0x in release, 15.9x in debug — the harness recovers
+    /// the true figure to within 1% in both profiles. Asserted at 8x, which
+    /// leaves room for a loaded machine while still being four times stricter
+    /// than the 2x this test used to demand.
     #[test]
     fn more_work_takes_longer() {
-        let light = measure("light", 0, 2000, 7, || {
-            let mut x = black_box(1u64);
-            for _ in 0..4 {
-                x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
-            }
-            x
+        let mut state = [0u8; 64];
+        let light = measure("chacha-1round", 0, 2000, 7, || {
+            ChaCha.permute(black_box(&mut state), 1)
         });
-        let heavy = measure("heavy", 0, 2000, 7, || {
-            let mut x = black_box(1u64);
-            for _ in 0..64 {
-                x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
-            }
-            x
+        let mut state = [0u8; 64];
+        let heavy = measure("chacha-16round", 0, 2000, 7, || {
+            ChaCha.permute(black_box(&mut state), 16)
         });
-        // A 16x work difference must survive timer noise, or the harness is
-        // not measuring anything.
         assert!(
-            heavy.ns_per_iter > light.ns_per_iter * 2.0,
+            heavy.ns_per_iter > light.ns_per_iter * 8.0,
             "harness failed to distinguish 16x more work: light={:.1}ns heavy={:.1}ns",
+            light.ns_per_iter,
+            heavy.ns_per_iter
+        );
+    }
+
+    /// The negative half of the same bracket, and the reason the test above
+    /// looks the way it does.
+    ///
+    /// A closed-form workload is *not* measurable, in release, no matter how
+    /// many iterations it nominally runs. This is asserted loosely — as "the
+    /// ratio does not reach the 8x the real test demands" — because it pins the
+    /// limitation without depending on exactly how a given LLVM chooses to fold
+    /// the recurrence.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn an_algebraically_foldable_workload_is_not_measurable() {
+        let foldable = |n: usize| {
+            measure("lcg", 0, 2000, 7, move || {
+                let mut x = black_box(1u64);
+                for _ in 0..n {
+                    x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
+                }
+                x
+            })
+        };
+        let light = foldable(4);
+        let heavy = foldable(64);
+        assert!(
+            heavy.ns_per_iter < light.ns_per_iter * 8.0,
+            "a closed-form recurrence unexpectedly scaled with its iteration \
+             count: light={:.1}ns heavy={:.1}ns. If this now scales, the note on \
+             `measure` may be out of date — check before deleting it.",
             light.ns_per_iter,
             heavy.ns_per_iter
         );
