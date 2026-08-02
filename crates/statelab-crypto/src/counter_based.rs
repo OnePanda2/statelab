@@ -104,8 +104,8 @@ pub fn philox4x64(ctr: [u64; 4], key: [u64; 2], rounds: usize) -> [u64; 4] {
 pub fn threefry4x64(ctr: [u64; 4], key: [u64; 4], rounds: usize) -> [u64; 4] {
     assert!(rounds <= 72, "Threefry-4x64 is defined for at most 72 rounds");
     let mut ks = [key[0], key[1], key[2], key[3], SKEIN_KS_PARITY64];
-    for i in 0..4 {
-        ks[4] ^= key[i];
+    for k in &key {
+        ks[4] ^= k;
     }
     let mut x = [
         ctr[0].wrapping_add(ks[0]),
