@@ -15,13 +15,32 @@
 //! - **N2** several seeds interleaved into one stream. Seed-lattice structure
 //!   is invisible per-stream and shows up here as autocorrelation at a lag
 //!   equal to the interleave width.
-//! - **N3** the seed → first-output map treated as a function in its own right,
-//!   measured with the same avalanche machinery used on permutations. This is
-//!   the sharpest of the four: it asks whether the *setup* diffuses, which no
-//!   existing battery asks.
-//! - **N4** every output bit position as its own binary sequence — bias and
-//!   autocorrelation — because low-bit weakness is classic and invisible in
+//! - **N3-DIFFUSION** the seed → first-output map treated as a function in its
+//!   own right, measured with the same avalanche machinery used on
+//!   permutations. It asks whether the *setup* diffuses, which no existing
+//!   battery asks.
+//! - **N4-POSITION** every output bit position as its own binary sequence — bias
+//!   and autocorrelation — because low-bit weakness is classic and invisible in
 //!   whole-word tests.
+//!
+//! ## Why N3 and N4 carry suffixes and N1/N2 do not
+//!
+//! The proposal's whole text on N3 and N4 is two clauses inside one sentence in
+//! §6.4 — no metric, no threshold, no procedure — and each admits **two**
+//! defensible readings that are not redundant with one another. The names here
+//! say which reading is implemented, because an earlier version of this module
+//! called them plainly "N3" and "N4" and so implied the clause had been
+//! discharged when half of it had not.
+//!
+//! | clause | this module | elsewhere |
+//! |---|---|---|
+//! | N3 "as a function in its own right" | `N3-DIFFUSION` — *does it diffuse* | `N3-STATISTICAL` — vary the seed, take output[0] from each, run a battery over the concatenation. Catches seed-space clustering this is blind to. |
+//! | N4 "each bit position independently" | `N4-POSITION` — per-position bias and autocorrelation | `N4-REVERSAL` — the reversal half, which is a no-op for any position-wise statistic and only means something against an order-sensitive battery. |
+//!
+//! `N3-STATISTICAL` and `N4-REVERSAL` need an external battery, so they live in
+//! `examples/` rather than here. **`N4-POSITION` does not answer the reversal
+//! question and must not be cited as though it does** — see
+//! [`bit_position_profile`], which proves why it cannot.
 //!
 //! ## The statistic, and the trap it inherits
 //!
@@ -43,15 +62,15 @@
 //!
 //! ## One input setting does not serve all four
 //!
-//! N1, N2 and N4 want **keyed** input: it is the realistic deployed case, and a
+//! N1, N2 and N4-POSITION want **keyed** input: it is the realistic deployed case, and a
 //! zero-filled state hands every design an artificially hard problem.
 //!
-//! N3 wants the **opposite**, and this cost a wrong table before it was caught.
+//! N3-DIFFUSION wants the **opposite**, and this cost a wrong table before it was caught.
 //! The keyed construction expands the seed through SplitMix64 on its way to the
-//! state tail, so a keyed N3 measures that expansion rather than the
+//! state tail, so a keyed N3-DIFFUSION measures that expansion rather than the
 //! permutation — the input-side twin of the output-side extraction trap this
-//! project already proved. Run N3 with `zero_frac: 1.0`. The reasoning, the two
-//! discriminating measurements, and the one direction keyed N3 *does* still see
+//! project already proved. Run N3-DIFFUSION with `zero_frac: 1.0`. The reasoning, the two
+//! discriminating measurements, and the one direction keyed N3-DIFFUSION *does* still see
 //! are all in [`seed_diffusion`]'s documentation.
 
 use crate::avalanche::{samples_for_cells, Probe};
@@ -309,10 +328,10 @@ pub fn seed_pair_correlation<P: Permutation + ?Sized>(
 }
 
 // ---------------------------------------------------------------------------
-// N3 — the seed-to-first-output map, as a function in its own right
+// N3-DIFFUSION — the seed-to-first-output map, as a function in its own right
 // ---------------------------------------------------------------------------
 
-/// N3: flip one bit of the seed, and see which bits of the produced block move.
+/// N3-DIFFUSION: flip one bit of the seed, and see which bits of the produced block move.
 ///
 /// This is [`crate::avalanche::avalanche_matrix`] with the input moved from the
 /// permutation's state to the *seed*, so it measures setup and permutation
@@ -321,11 +340,11 @@ pub fn seed_pair_correlation<P: Permutation + ?Sized>(
 ///
 /// # The input-side extraction trap — read before choosing `zero_frac`
 ///
-/// **N3 is the one test in this module that must NOT be run on keyed input.**
+/// **N3-DIFFUSION is the one test in this module that must NOT be run on keyed input.**
 ///
 /// The keyed construction reaches the state tail by expanding the seed through
 /// SplitMix64, and SplitMix64 is a strong nonlinear mixer. It sits *between the
-/// seed and the permutation*. Run N3 keyed and a good number means the key
+/// seed and the permutation*. Run N3-DIFFUSION keyed and a good number means the key
 /// schedule diffused, which it does whether the permutation is ChaCha or a
 /// wet paper bag.
 ///
@@ -343,14 +362,14 @@ pub fn seed_pair_correlation<P: Permutation + ?Sized>(
 /// output side, where a counter plus a strong finaliser passes every battery in
 /// existence. A strong function on either side of a weak state map hides it.
 /// The output-side version was found first and named; this is the input-side
-/// version, and it is worth stating that the *honest* input for N1, N2 and N4
-/// is the *misleading* input for N3.
+/// version, and it is worth stating that the *honest* input for N1, N2 and N4-POSITION
+/// is the *misleading* input for N3-DIFFUSION.
 ///
-/// Pass `zero_frac: 1.0` to isolate the permutation. Keyed N3 remains worth
+/// Pass `zero_frac: 1.0` to isolate the permutation. Keyed N3-DIFFUSION remains worth
 /// reporting — it is the realistic deployed path — but only alongside the
 /// isolated number, never instead of it.
 ///
-/// One asymmetry the tests pin: keyed N3 still catches *lane-local* designs
+/// One asymmetry the tests pin: keyed N3-DIFFUSION still catches *lane-local* designs
 /// like `lcg`, because a permutation that never mixes across lanes leaves
 /// output lane 0 a function of the raw seed alone, with no expansion mixed in.
 /// It is blind specifically to designs that mix lanes but do so weakly.
@@ -366,7 +385,7 @@ pub struct SeedDiffusion {
     pub zero_frac: f64,
 }
 
-/// Runs N3, averaging over `samples` random base seeds drawn from `probe_seed`.
+/// Runs N3-DIFFUSION, averaging over `samples` random base seeds drawn from `probe_seed`.
 ///
 /// Averaging over base seeds is what turns a deterministic map into a
 /// probability, exactly as random base states do for the permutation avalanche.
@@ -377,7 +396,7 @@ pub fn seed_diffusion<P: Permutation + ?Sized>(
     samples: usize,
     probe_seed: u64,
 ) -> SeedDiffusion {
-    assert!(samples > 0, "N3 needs at least one base seed");
+    assert!(samples > 0, "N3-DIFFUSION needs at least one base seed");
     const SEED_BITS: usize = 64;
 
     let out_bytes = cfg.extract.output_bytes(perm.state_bytes());
@@ -439,10 +458,10 @@ pub fn seed_diffusion<P: Permutation + ?Sized>(
 }
 
 // ---------------------------------------------------------------------------
-// N4 — every bit position as its own sequence
+// N4-POSITION — every bit position as its own sequence
 // ---------------------------------------------------------------------------
 
-/// N4: bias and autocorrelation, measured per bit position rather than per word.
+/// N4-POSITION: bias and autocorrelation, measured per bit position rather than per word.
 #[derive(Debug, Clone)]
 pub struct BitPositionProfile {
     pub name: &'static str,
@@ -470,26 +489,35 @@ impl BitPositionProfile {
     }
 }
 
-/// Runs N4 on a single stream.
+/// Runs N4-POSITION on a single stream.
 ///
-/// **On bit reversal.** §6.4 N4 also asks for reversed bit order. Reversal
-/// permutes which position carries which measurement and nothing else, so every
-/// statistic here — all of which are computed per position and then maximised —
-/// is exactly invariant under it. Running it would produce an identical number
-/// and a false sense of coverage. The reversal that *does* matter is against an
-/// order-sensitive external battery, which is why
-/// [`StreamConfig::bit_reverse`] exists and is exposed by `statelab-stream`.
-/// This is stated rather than quietly skipped.
+/// **This is the position half of §6.4's N4 clause, and only that half.**
+///
+/// The clause reads "reversed bit order **and** each bit position
+/// independently". This implements the second conjunct. It cannot implement the
+/// first, and the reason is a proof rather than a preference: every statistic
+/// here is computed per position and then maximised, so reversing bit order
+/// merely permutes *which position carries which measurement* and the maximum
+/// is exactly invariant. Running a reversed pass here would return an identical
+/// number and manufacture a false sense of coverage — which is why the test
+/// `n4_is_invariant_under_bit_reversal_as_documented` pins the invariance
+/// instead of pretending to test reversal.
+///
+/// Reversal is only meaningful against an **order-sensitive** battery. That is
+/// `N4-REVERSAL`, run externally through PractRand via
+/// [`StreamConfig::bit_reverse`] and `statelab-stream --bit-reverse`.
+///
+/// **Do not cite `N4-POSITION` as having answered the reversal question.**
 pub fn bit_position_profile<P: Permutation + ?Sized>(
     perm: &P,
     cfg: &StreamConfig,
     blocks: usize,
     max_lag: usize,
 ) -> BitPositionProfile {
-    assert!(max_lag >= 1, "N4 needs at least one lag");
+    assert!(max_lag >= 1, "N4-POSITION needs at least one lag");
     assert!(
         blocks > max_lag * 2,
-        "N4 needs blocks well beyond max_lag; got {blocks} blocks for lag {max_lag}"
+        "N4-POSITION needs blocks well beyond max_lag; got {blocks} blocks for lag {max_lag}"
     );
 
     let out_bytes = cfg.extract.output_bytes(perm.state_bytes());
@@ -498,7 +526,7 @@ pub fn bit_position_profile<P: Permutation + ?Sized>(
     profile_from_blocks(perm.name(), &stream, cols, blocks, max_lag, cfg)
 }
 
-/// The N4 statistic over an already-materialised block sequence.
+/// The N4-POSITION statistic over an already-materialised block sequence.
 ///
 /// Split out so N2 can feed it an interleaved stream without regenerating it.
 fn profile_from_blocks(
@@ -581,7 +609,7 @@ impl InterleavedStreams {
     }
 }
 
-/// Builds the interleaved stream and runs the N4 statistic on it.
+/// Builds the interleaved stream and runs the N4-POSITION statistic on it.
 ///
 /// `blocks_per_seed` blocks are taken from each seed, so the combined stream is
 /// `blocks_per_seed * seeds.len()` blocks long.
@@ -728,7 +756,7 @@ mod tests {
         assert!(low && mid && high, "need distance-1 pairs at low, mid and high bits");
     }
 
-    // -- N3 ----------------------------------------------------------------
+    // -- N3-DIFFUSION ----------------------------------------------------------------
 
     /// Positive control: one seed bit must move about half the output.
     ///
@@ -741,7 +769,7 @@ mod tests {
         assert!(r.grid.sampling_is_adequate(TOL));
         assert!(
             r.grid.is_independent(TOL),
-            "ChaCha N3 failed: max deviation {:.4}",
+            "ChaCha N3-DIFFUSION failed: max deviation {:.4}",
             r.grid.max_deviation()
         );
     }
@@ -768,8 +796,8 @@ mod tests {
 
     /// The input-side extraction trap, pinned.
     ///
-    /// A permutation given one round cannot have diffused anything. If keyed N3
-    /// calls that clean, keyed N3 is measuring the key schedule — and this test
+    /// A permutation given one round cannot have diffused anything. If keyed N3-DIFFUSION
+    /// calls that clean, keyed N3-DIFFUSION is measuring the key schedule — and this test
     /// exists so that conclusion cannot be quietly lost the way the noise floor
     /// nearly was.
     #[test]
@@ -791,11 +819,11 @@ mod tests {
         );
         assert!(
             k.grid.max_deviation() < 0.2,
-            "keyed N3 is expected to look clean at one round — that is the trap"
+            "keyed N3-DIFFUSION is expected to look clean at one round — that is the trap"
         );
         assert!(
             z.grid.max_deviation() > 0.45,
-            "isolated N3 must expose one round as undiffused, got {:.4}",
+            "isolated N3-DIFFUSION must expose one round as undiffused, got {:.4}",
             z.grid.max_deviation()
         );
     }
@@ -803,8 +831,8 @@ mod tests {
     /// The same trap on a design whose defect is already documented elsewhere.
     ///
     /// §5.5 records `xoshiro256++` as GF(2)-linear, with every avalanche cell
-    /// exactly 0.0 or 1.0 and a mean deviation of exactly 0.5. Isolated N3 must
-    /// reproduce that signature bit for bit; keyed N3 must miss it entirely.
+    /// exactly 0.0 or 1.0 and a mean deviation of exactly 0.5. Isolated N3-DIFFUSION must
+    /// reproduce that signature bit for bit; keyed N3-DIFFUSION must miss it entirely.
     #[test]
     fn n3_isolated_reproduces_the_gf2_linear_signature() {
         let z = seed_diffusion(&Xoshiro256pp, &isolated(0), 0, 256, 0x5EED);
@@ -818,11 +846,11 @@ mod tests {
         let k = seed_diffusion(&Xoshiro256pp, &keyed(0), 0, 256, 0x5EED);
         assert!(
             k.grid.max_deviation() < 0.2,
-            "keyed N3 is expected to hide it — that is why the isolated run exists"
+            "keyed N3-DIFFUSION is expected to hide it — that is why the isolated run exists"
         );
     }
 
-    /// The asymmetry worth knowing: keyed N3 is not useless, it is blind in one
+    /// The asymmetry worth knowing: keyed N3-DIFFUSION is not useless, it is blind in one
     /// specific direction. A lane-local design leaves output lane 0 a function
     /// of the raw seed alone, so no amount of key expansion elsewhere hides it.
     #[test]
@@ -830,12 +858,12 @@ mod tests {
         let r = seed_diffusion(&Lcg::default(), &keyed(0), 0, 256, 0x5EED);
         assert!(
             r.grid.max_deviation() > 0.45,
-            "lane-local designs stay visible under keyed N3, got {:.4}",
+            "lane-local designs stay visible under keyed N3-DIFFUSION, got {:.4}",
             r.grid.max_deviation()
         );
     }
 
-    // -- N4 ----------------------------------------------------------------
+    // -- N4-POSITION ----------------------------------------------------------------
 
     #[test]
     fn n4_chacha_has_no_biased_or_autocorrelated_bit_position() {
@@ -844,7 +872,7 @@ mod tests {
         assert!(r.sampling_is_adequate(TOL));
         assert!(
             r.max_deviation() <= TOL,
-            "ChaCha N4 failed: bias {:.4}, autocorr {:.4}",
+            "ChaCha N4-POSITION failed: bias {:.4}, autocorr {:.4}",
             r.bias.max_deviation(),
             r.autocorr.max_deviation()
         );
@@ -860,7 +888,7 @@ mod tests {
     }
 
     /// A lane-local design in counter mode leaves almost the whole output
-    /// frozen, and N4 must see it.
+    /// frozen, and N4-POSITION must see it.
     ///
     /// Counter mode rebuilds the state per block as `seed || block || keyed`,
     /// so only lane 1 changes from one block to the next. A permutation that
@@ -887,7 +915,7 @@ mod tests {
         );
     }
 
-    /// The reason N4 exists: a T-function's output bit *i* depends only on
+    /// The reason N4-POSITION exists: a T-function's output bit *i* depends only on
     /// input bits `0..=i`, so its weakness concentrates in the low offsets.
     ///
     /// Measured on lane 1 alone. That restriction is not tuning — in counter

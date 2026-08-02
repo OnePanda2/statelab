@@ -74,10 +74,10 @@ fn measure(perm: &dyn Permutation, rounds: usize) -> Row {
     let woven_seeds: Vec<u64> = (1..=8u64).collect();
     let n2 = interleaved_streams(perm, &cfg, &woven_seeds, 1024);
 
-    // -- N3 -----------------------------------------------------------------
+    // -- N3-DIFFUSION -----------------------------------------------------------------
     //
     // Zero-filled, unlike every other test here. Keyed input routes the seed
-    // through SplitMix64 before the permutation ever sees it, so a keyed N3
+    // through SplitMix64 before the permutation ever sees it, so a keyed N3-DIFFUSION
     // scores the key schedule — it called one-round ChaCha clean and hid
     // xoshiro256++'s linearity completely. See `seed_diffusion`'s docs; the
     // isolation table at the bottom of this report shows both numbers.
@@ -93,7 +93,7 @@ fn measure(perm: &dyn Permutation, rounds: usize) -> Row {
         0x5EED,
     );
 
-    // -- N4, five seeds -----------------------------------------------------
+    // -- N4-POSITION, five seeds -----------------------------------------------------
     let n4: Vec<f64> = N4_SEEDS
         .iter()
         .map(|&s| {
@@ -142,15 +142,15 @@ fn main() {
 
     println!("   protocol");
     println!("     extraction    raw state — configuration (a), no output function");
-    println!("     input         N1/N2/N4 fully keyed (zero_frac 0.00)");
-    println!("                   N3 zero-filled (zero_frac 1.00) — see the isolation");
-    println!("                   table below; keyed N3 measures the key schedule");
+    println!("     input         N1/N2/N4-POSITION keyed (zero_frac 0.00)");
+    println!("                   N3-DIFFUSION zero-filled (zf 1.00) — see the isolation");
+    println!("                   table below; keyed N3-DIFFUSION measures the key schedule");
     println!("     rounds        fixed at {FIXED_ROUNDS} for every design");
     println!("     tolerance     {TOLERANCE}");
     println!("     N1            12 seeds, 66 pairs, incl. Hamming-distance-1 at low/mid/high bits");
     println!("     N2            8 seeds interleaved, lags swept to 16");
-    println!("     N3            seed → block 0, averaged over random base seeds");
-    println!("     N4            5 seeds, 4096 blocks, lags 1..8; median reported\n");
+    println!("     N3-DIFF       seed → block 0, averaged over random base seeds");
+    println!("     N4-POS        5 seeds, 4096 blocks, lags 1..8; median reported\n");
 
     let mut rows = Vec::new();
     for name in PERMUTATIONS {
@@ -160,7 +160,7 @@ fn main() {
 
     println!(
         "   {:<26} {:>8} {:>8} {:>8} {:>8} {:>16} {:>8}  verdict",
-        "permutation", "N1", "N2", "N3", "N4 med", "N4 [min..max]", "floor"
+        "permutation", "N1", "N2", "N3-DIF", "N4-POS", "N4-POS [min..max]", "floor"
     );
     for r in &rows {
         println!(
@@ -226,14 +226,14 @@ fn main() {
     // -- where each battery goes silent ------------------------------------
     //
     // The question no existing battery here can answer: does the *seed* map
-    // need more rounds than the permutation's own avalanche does? If N3
+    // need more rounds than the permutation's own avalanche does? If N3-DIFFUSION
     // saturates later than the internal avalanche did, then a design tuned on
     // avalanche alone is under-rounded for the reseeding case.
     println!("\n-- Round sweep: where each test falls silent (chacha) --");
-    println!("   N1/N2/N4 keyed, N3 isolated, as in the main table.");
+    println!("   N1/N2/N4-POSITION keyed, N3-DIFFUSION isolated, as in the main table.");
     println!(
         "   {:>6} {:>10} {:>10} {:>10} {:>10}",
-        "rounds", "N1", "N2", "N3", "N4 med"
+        "rounds", "N1", "N2", "N3-DIF", "N4-POS"
     );
     let chacha = permutation_by_name("chacha").unwrap();
     for rounds in 1..=8 {
@@ -246,7 +246,7 @@ fn main() {
 
     // -- input construction, held against the same axis as the dose-response
     println!("\n-- Input construction at 3 rounds (chacha): keyed vs zero-filled --");
-    println!("   {:>10} {:>10} {:>10} {:>10}", "zero_frac", "N1", "N3", "N4");
+    println!("   {:>10} {:>10} {:>10} {:>10}", "zero_frac", "N1", "N3-DIF", "N4-POS");
     for zf in [0.0, 0.25, 0.5, 0.75, 1.0] {
         let cfg = StreamConfig {
             zero_frac: zf,
@@ -278,18 +278,18 @@ fn main() {
         );
     }
 
-    // -- is N3 measuring the permutation, or the key schedule? --------------
+    // -- is N3-DIFFUSION measuring the permutation, or the key schedule? --------------
     //
     // Under keyed input the seed reaches the tail through a SplitMix64
     // expansion, which is a strong nonlinear mixer sitting *inside setup*. If
-    // N3 is dominated by it, then N3 says nothing about the permutation — the
+    // N3-DIFFUSION is dominated by it, then it says nothing about the permutation — the
     // extraction trap relocated from the output side to the input side.
     //
     // Two discriminators, both cheap. A permutation that cannot have diffused
     // (1 round) should not read clean. And xoshiro256++, which is GF(2)-linear
     // and whose matrices are known to be all-0.0-or-1.0, must show that
     // signature when the expansion is removed.
-    println!("\n-- N3 isolation: keyed input vs zero-filled (no key expansion) --");
+    println!("\n-- N3-DIFFUSION isolation: keyed input vs zero-filled (no key expansion) --");
     println!(
         "   {:<26} {:>7} {:>18} {:>18}",
         "permutation", "rounds", "keyed max/mean", "zero-filled max/mean"
@@ -330,8 +330,8 @@ fn main() {
     println!("   would produce, so nothing below it is a measurement.");
     println!("   N1  worst correlated bit between any two seeded streams");
     println!("   N2  worst bias or autocorrelation in 8 interleaved streams");
-    println!("   N3  worst cell of the seed → first-output avalanche matrix");
-    println!("   N4  worst per-position bias or autocorrelation, median of 5 seeds");
+    println!("   N3-DIF  worst cell of the seed → first-output avalanche matrix");
+    println!("   N4-POS  worst per-position bias or autocorrelation, median of 5 seeds");
     println!("   NOTE  the degenerate controls do not really have a round count;");
     println!("         fixing it at {FIXED_ROUNDS} removes a confound rather than");
     println!("         making them comparable designs.");
@@ -343,7 +343,7 @@ fn main() {
     println!("   random number generator used to pick base seeds. N1-N4 is a");
     println!("   screen with two outcomes, not a scale.");
     println!();
-    println!("   It also adds no round-count resolution: keyed N1/N2/N4 fall");
+    println!("   It also adds no round-count resolution: keyed N1/N2/N4-POSITION fall");
     println!("   silent at 3 rounds where the avalanche battery needed 4. That");
     println!("   is a different, coarser failure class — not a finer instrument.");
     println!("   Under adversarial input (zero_frac 1.00) N1 still fails at 3");
