@@ -32,6 +32,7 @@ pub mod arx_structure;
 pub mod avalanche;
 pub mod bench;
 pub mod correlation;
+pub mod counter_based;
 pub mod generator;
 pub mod linearity;
 pub mod permutation;
