@@ -33,6 +33,7 @@ pub mod avalanche;
 pub mod bench;
 pub mod correlation;
 pub mod generator;
+pub mod linearity;
 pub mod permutation;
 pub mod qr_diffusion;
 pub mod render;
