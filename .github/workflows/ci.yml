@@ -60,6 +60,16 @@ jobs:
       - name: cargo test --workspace
         run: cargo test --workspace --exclude statelab
 
+      # The release profile is NOT redundant with the debug run above. One test
+      # exists only in release — the harness self-check at bench.rs, gated on
+      # #[cfg(not(debug_assertions))], because in debug the compiler does not
+      # fold the workload it is checking for. That test was silently red once
+      # and CI never saw it, which is precisely what "trust CI over local green"
+      # is supposed to prevent. This step costs a second full build; that is the
+      # price of the release path not being outside CI entirely.
+      - name: cargo test --workspace --release
+        run: cargo test --workspace --exclude statelab --release
+
   frontend:
     name: Frontend (React + TypeScript)
     runs-on: ubuntu-latest

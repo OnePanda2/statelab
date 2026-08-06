@@ -160,14 +160,20 @@ fn main() {
     for name in ["chacha", "chacha64", "blake2b"] {
         let p = permutation_by_name(name).expect("registered");
         let sweep = rounds_to_avalanche(p.as_ref(), 12, samples, tolerance, 1);
-        println!("   {:<10} first full avalanche: {:?}", name, sweep.rounds_to_avalanche);
+        println!(
+            "   {:<10} first full avalanche: {:?}",
+            name, sweep.rounds_to_avalanche
+        );
         for (r, maxd, _mean, dead) in sweep.per_round.iter().take(8) {
             println!("      r{r:<3} max_dev {maxd:.4}  dead {dead:.4}");
         }
     }
 
     let sweep = rounds_to_avalanche(&Nager64, 12, samples, tolerance, 1);
-    println!("\n   {:<10} first full avalanche: {:?}", "nager64", sweep.rounds_to_avalanche);
+    println!(
+        "\n   {:<10} first full avalanche: {:?}",
+        "nager64", sweep.rounds_to_avalanche
+    );
     for (r, maxd, _mean, dead) in sweep.per_round.iter().take(8) {
         println!("      r{r:<3} max_dev {maxd:.4}  dead {dead:.4}");
     }

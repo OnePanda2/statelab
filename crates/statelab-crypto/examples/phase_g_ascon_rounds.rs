@@ -174,7 +174,10 @@ fn main() {
 
     println!("\n-- Reference: expected full-rank fraction under the null --");
     for n in [320usize, 512, 1024] {
-        println!("   n={n:<5} P(full rank) = {:.6}", full_rank_probability(n, n));
+        println!(
+            "   n={n:<5} P(full rank) = {:.6}",
+            full_rank_probability(n, n)
+        );
     }
     println!("\n{condition} conditions, all seed ranges disjoint.");
 }

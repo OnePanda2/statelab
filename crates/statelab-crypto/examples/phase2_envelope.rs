@@ -27,20 +27,23 @@ fn main() {
         yes_no(cpu.can_measure_aes_designs())
     );
     println!(
-        "   H2 measurable here (GFNI + AVX-512):                    {}",
-        yes_no(cpu.can_measure_h2())
+        "   GFNI + AVX-512 designs measurable here:                 {}",
+        yes_no(cpu.can_measure_gfni_designs())
     );
 
-    if !cpu.can_measure_aes_designs() || !cpu.can_measure_h2() {
+    if !cpu.can_measure_aes_designs() || !cpu.can_measure_gfni_designs() {
         println!("\n   *** PARTIAL ENVIRONMENT ***");
         if !cpu.can_measure_aes_designs() {
             println!("   No AES-NI. Every AES-round-based incumbent is unmeasurable here,");
             println!("   and any ChaCha-versus-AES comparison from this machine would");
             println!("   flatter ChaCha for a reason that has nothing to do with design.");
         }
-        if !cpu.can_measure_h2() {
-            println!("   No GFNI/AVX-512. H2 cannot be tested. Gate 2 MUST NOT fire on");
-            println!("   this hardware: absence of a measurement is not a negative result.");
+        if !cpu.can_measure_gfni_designs() {
+            println!("   No GFNI/AVX-512, so nothing in that class can be measured here.");
+            println!("   Absence of a measurement is not a negative result. Note also that");
+            println!("   the hardware-dependent direction (formerly H2) is OUT OF SCOPE BY");
+            println!("   DECISION, not by measurement: it was never tested, and this probe");
+            println!("   is retained to describe the host, not to adjudicate a hypothesis.");
         }
     }
 

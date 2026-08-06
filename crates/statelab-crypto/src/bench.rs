@@ -229,8 +229,12 @@ impl CpuFeatures {
         self.aes
     }
 
-    /// Whether the instruction-co-design hypothesis H2 can be tested here.
-    pub fn can_measure_h2(&self) -> bool {
+    /// Whether GFNI + AVX-512 designs could be measured on this host.
+    ///
+    /// Retained as a capability probe only. The hardware-dependent direction is
+    /// **out of scope by decision, not by measurement** — H2 was never tested,
+    /// and nothing in this crate should be read as having falsified it.
+    pub fn can_measure_gfni_designs(&self) -> bool {
         self.gfni && self.avx512f
     }
 
@@ -351,8 +355,8 @@ mod tests {
         // Any x86_64 CPU has SSE2; it is part of the baseline ISA.
         #[cfg(target_arch = "x86_64")]
         assert!(f.sse2, "x86_64 always has SSE2");
-        // H2 needs both, so the helper must not claim more than the parts.
-        assert_eq!(f.can_measure_h2(), f.gfni && f.avx512f);
+        // Needs both, so the helper must not claim more than the parts.
+        assert_eq!(f.can_measure_gfni_designs(), f.gfni && f.avx512f);
         assert!(!f.summary().is_empty());
     }
 }
