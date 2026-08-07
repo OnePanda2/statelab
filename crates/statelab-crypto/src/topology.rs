@@ -128,6 +128,26 @@ impl Topology {
     /// alone "can never mix data *between* groups, no matter how many rounds
     /// run". Costs microseconds where the avalanche measurement costs seconds,
     /// which is what makes it worth filtering on first.
+    ///
+    /// # *** THE BOUND IS VALID BUT LOOSE, AND THE REASON IS ORDER-BLINDNESS ***
+    ///
+    /// Measured 2026-08-08 (`PHASE_M` §5C): **not one wiring in 1181 — including
+    /// all four with diameter 2 — had zero dead pairs after 2 rounds.** ChaCha
+    /// itself carries 4.4% dead pairs there. The natural reading of diameter 2,
+    /// "every lane pair is joined within two hops, so two rounds suffice for full
+    /// dependency", is **wrong**.
+    ///
+    /// This graph collapses both partitions into one undirected edge set, which
+    /// **discards the schedule**. A 2-hop path in the union may be
+    /// partition-A-then-partition-A, or B-then-B — and a 2-round evaluation runs
+    /// A then B. Paths the graph offers may be ones the round schedule never
+    /// walks.
+    ///
+    /// So the lower bound holds (any real schedule is a sub-sequence of these
+    /// edges, so it cannot beat the union's diameter) but it is optimistic, and
+    /// **diameter must not be read as predicting the round count**. The faithful
+    /// object is a time-expanded graph alternating the two partitions by layer;
+    /// this is not that, and does not claim to be.
     pub fn diameter(&self) -> Option<usize> {
         let adj = self.adjacency();
         let mut worst = 0usize;
