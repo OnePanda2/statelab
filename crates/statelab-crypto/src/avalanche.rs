@@ -1,5 +1,13 @@
-//! Diffusion battery (proposal §6.3 D1–D4): SAC, BIC, rounds-to-avalanche,
-//! and the dependency matrix.
+//! Diffusion battery (proposal §6.3 D1–D4): SAC, rounds-to-avalanche, and the
+//! dependency matrix.
+//!
+//! **BIC is NOT here and never was**, despite this line having claimed it until
+//! 2026-08-06. It lives in [`crate::bic`], because it is a correlation
+//! coefficient rather than a proportion and needs its own null — see that
+//! module's header. The claim sat here unimplemented for months; it is recorded
+//! rather than quietly deleted, because a module doc asserting a metric that
+//! does not exist is the same class of error as the `PROJECT_BRIEF` metric count
+//! and is worth being able to find again.
 //!
 //! This is the battery that answers target T1, and `rounds_to_avalanche` is the
 //! headline comparative number the whole programme is organised around.
