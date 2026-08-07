@@ -71,8 +71,14 @@ fn main() {
     // ------------------------------------------------------------- controls
     println!("-- CONTROL: ChaCha's own wiring through this identical path --");
     let cc = chacha_topology();
+    let mut chacha_screen_dev = f64::NAN;
     for r in [SCREEN_ROUNDS, 4] {
         let (full, dev) = avalanches_at(&cc, r, samples, 1);
+        if r == SCREEN_ROUNDS {
+            // The number every candidate is compared against, not just the
+            // threshold. Item (5).
+            chacha_screen_dev = dev;
+        }
         println!(
             "   chacha wiring @ {r} rounds: max_dev {dev:.4}  full avalanche {}",
             if full { "YES" } else { "no" }
@@ -104,11 +110,18 @@ fn main() {
     let mut disconnected = 0usize;
     let mut screened = 0usize;
     let mut hits: Vec<(Topology, f64)> = Vec::new();
+    // *** ITEM (5). *** The first run recorded only threshold crossings and
+    // discarded max_deviation for everything that failed — the exact inversion
+    // of "report the CONTINUOUS quantity, never the threshold crossing, which
+    // is a boundary-sensitive derivative of it". It could not answer whether
+    // anything came CLOSE. Every measurement is kept now; it costs one push.
+    let mut devs: Vec<(f64, usize)> = Vec::new();
+    let mut best: Option<(f64, Topology)> = None;
 
     let t0 = std::time::Instant::now();
     for i in 0..n {
         let t = random_topology(&mut probe);
-        match t.diameter() {
+        let d = match t.diameter() {
             None => {
                 disconnected += 1;
                 continue;
@@ -120,17 +133,23 @@ fn main() {
                 if d > SCREEN_ROUNDS {
                     continue;
                 }
+                d
             }
-        }
+        };
         screened += 1;
         let (full, dev) = avalanches_at(&t, SCREEN_ROUNDS, samples, 1);
+        devs.push((dev, d));
+        if best.as_ref().is_none_or(|(b, _)| dev < *b) {
+            best = Some((dev, t.clone()));
+        }
         if full {
             hits.push((t, dev));
         }
-        if i % 2000 == 0 && i > 0 {
+        if i % 100 == 0 && i > 0 {
             println!(
-                "   ...{i}/{n}  screened {screened}  hits {}  ({:.0}s)",
+                "   ...{i}/{n}  screened {screened}  hits {}  best max_dev {:.4}  ({:.0}s)",
                 hits.len(),
+                best.as_ref().map(|(b, _)| *b).unwrap_or(f64::NAN),
                 t0.elapsed().as_secs_f64()
             );
         }
@@ -147,6 +166,60 @@ fn main() {
     println!("\n   {screened} of {n} survived the pre-filter and were measured.",);
     println!("   Pre-filter avoided {} avalanche matrices.", n - screened);
     println!("   Elapsed {:.0}s.\n", t0.elapsed().as_secs_f64());
+
+    // ------------------------------------------- the continuous quantity, (5)
+    println!("-- max_dev distribution at {SCREEN_ROUNDS} rounds — ITEM (5) --");
+    println!("   The threshold answers 'did anything win'. This answers the");
+    println!("   question the first run could not: DID ANYTHING COME CLOSE?\n");
+    let mut sorted: Vec<f64> = devs.iter().map(|(d, _)| *d).collect();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    if !sorted.is_empty() {
+        let pick = |q: f64| sorted[((sorted.len() - 1) as f64 * q).round() as usize];
+        println!("   chacha (same path, same seed)  {chacha_screen_dev:.4}");
+        println!("   tolerance (the pass mark)      {TOLERANCE:.4}");
+        println!("   ----");
+        println!("   best candidate                 {:.4}", sorted[0]);
+        println!("   5th percentile                 {:.4}", pick(0.05));
+        println!("   median                         {:.4}", pick(0.50));
+        println!("   95th percentile                {:.4}", pick(0.95));
+        println!(
+            "   worst candidate                {:.4}",
+            sorted[sorted.len() - 1]
+        );
+        let beat_chacha = sorted.iter().filter(|&&d| d < chacha_screen_dev).count();
+        println!(
+            "\n   Candidates with a LOWER max_dev than chacha at {SCREEN_ROUNDS} rounds: {beat_chacha}/{}",
+            sorted.len()
+        );
+        println!("   (Lower is better. Beating chacha here without crossing the");
+        println!("    tolerance is not a win, but it is the signal a directed");
+        println!("    search would climb — and it is what the first run threw away.)");
+        if let Some((bd, bt)) = &best {
+            println!(
+                "\n   Best wiring found, max_dev {bd:.4}, diameter {:?}:",
+                bt.diameter()
+            );
+            println!("     {:?}", bt.partitions[0]);
+            println!("     {:?}", bt.partitions[1]);
+        }
+        // Does connectivity predict diffusion at all? Cheap to answer now.
+        for target in [2usize, 3] {
+            let g: Vec<f64> = devs
+                .iter()
+                .filter(|(_, d)| *d == target)
+                .map(|(dev, _)| *dev)
+                .collect();
+            if !g.is_empty() {
+                let mean = g.iter().sum::<f64>() / g.len() as f64;
+                let mn = g.iter().cloned().fold(f64::INFINITY, f64::min);
+                println!(
+                    "   diameter {target}: n={:<5} mean max_dev {mean:.4}  best {mn:.4}",
+                    g.len()
+                );
+            }
+        }
+    }
+    println!();
 
     // -------------------------------------------------------------- verdict
     if hits.is_empty() {
