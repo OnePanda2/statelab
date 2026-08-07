@@ -122,15 +122,35 @@ impl LifecycleRng for FastKeyErasureRng {
 
 /// Fast key erasure plus a fork marker the platform destroys on fork.
 ///
-/// This models Linux's `MADV_WIPEONFORK`: a page that is zeroed in the child
-/// but not the parent. Before emitting, a zeroed marker means "I am a child
-/// that has not reseeded yet", and the generator reseeds from fresh entropy.
+/// This models a page that is zeroed in the child but not the parent. Before
+/// emitting, a zeroed marker means "I am a child that has not reseeded yet",
+/// and the generator reseeds from fresh entropy.
 ///
 /// **The safety comes from the platform, not from the construction.** There is
 /// no pure-userspace state a child can inspect to learn it was forked — its
 /// memory is by definition identical to its parent's. That is why §3.7 calls
 /// fork reuse "genuinely unsolved at the architecture level", and modelling it
 /// here should not be mistaken for solving it.
+///
+/// # Verified against the incumbents, 2026-08-07
+///
+/// This is not a hypothetical mechanism. Both are real and both exist for this
+/// exact purpose:
+///
+/// * **OpenBSD** `lib/libc/crypt/arc4random.h`, `_rs_allocate`, calls
+///   `minherit(p, sizeof(*p), MAP_INHERIT_ZERO)` on its mmap'd state, and
+///   `arc4random.c` comments *"Marked MAP_INHERIT_ZERO, so zero'd out in fork
+///   children."* Its `_rs_forkdetect()` is an **empty function** — the platform
+///   does the whole job, which is this type's claim in the incumbent's source.
+/// * **Linux** added `MADV_WIPEONFORK` in **4.14**, and `madvise(2)` names the
+///   motivation: *"sensitive per-process data (for example, PRNG seeds,
+///   cryptographic secrets, and so on) is not handed to child processes."*
+///
+/// One difference from OpenBSD, so this type is not over-read: it **pushes**
+/// entropy in through [`LifecycleRng::on_fork`], modelling a `pthread_atfork`
+/// handler. OpenBSD **pulls** instead — the zeroed page is noticed at the next
+/// stir, which calls `getentropy(2)`. Equivalent for the collision question,
+/// different mechanism.
 #[derive(Clone)]
 pub struct WipeOnForkRng {
     inner: FastKeyErasureRng,
