@@ -1,0 +1,197 @@
+//! TOPOLOGY SEARCH — the first attempt this project has made to GENERATE a
+//! candidate rather than evaluate someone else's.
+//!
+//! ```text
+//! cargo run -p statelab-crypto --release --example topology_search -- [N] [seed]
+//! ```
+//!
+//! ## The question, stated so it can only be answered yes or no
+//!
+//! ChaCha's wiring reaches full avalanche at 4 rounds. **Is there a wiring, at
+//! identical cost, that reaches it at 3?**
+//!
+//! Cost is identical by construction: every candidate is a pair of partitions of
+//! the same 16 lanes into 4 groups of 4, driven by ChaCha's own quarter round.
+//! Same operations, same register pressure, same memory traffic, same lane
+//! count. Only the wiring differs. So the screen is binary — avalanche at 3
+//! rounds, or not — and a hit is a 1.33x round-count improvement at zero cost.
+//!
+//! ## Why the screen is one matrix and not a sweep
+//!
+//! A full 12-round sweep costs ~22 s per candidate. The question does not need a
+//! sweep: it needs one avalanche matrix at exactly 3 rounds. That is ~12x
+//! cheaper and asks precisely the question. Survivors get the full sweep.
+//!
+//! ## Discipline
+//!
+//! * Diameter pre-filter first — microseconds, and it lower-bounds the thing the
+//!   expensive measurement computes.
+//! * `recommended_samples()` throughout — item (1), an avalanche number without
+//!   an adequacy check is suspect.
+//! * ChaCha's own wiring runs through the identical path as a control, at both 3
+//!   and 4 rounds. **It already caught a 2x unit error once.**
+//! * Any hit is re-checked on 5 disjoint seeds before being reported — item (10).
+//! * A hit is a CANDIDATE WORTH EVALUATING, not a result. See `PHASE_L` §4.
+
+use statelab_crypto::avalanche::{avalanche_matrix, recommended_samples, rounds_to_avalanche};
+use statelab_crypto::topology::{
+    chacha_topology, random_topology, Topology, TopologyPermutation, LANES,
+};
+
+const TOLERANCE: f64 = 0.12;
+const SCREEN_ROUNDS: usize = 3;
+const CONFIRM_SEEDS: [u64; 5] = [1, 2, 3, 4, 5];
+
+fn avalanches_at(t: &Topology, rounds: usize, samples: usize, seed: u64) -> (bool, f64) {
+    let p = TopologyPermutation {
+        topology: t.clone(),
+    };
+    let m = avalanche_matrix(&p, rounds, samples, seed);
+    (m.is_full_avalanche(TOLERANCE), m.max_deviation())
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let n: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(20_000);
+    let seed: u64 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
+
+    let bits = LANES * 32;
+    let samples = recommended_samples(bits, TOLERANCE);
+
+    println!("TOPOLOGY SEARCH — can any wiring beat ChaCha's 4 rounds at equal cost?\n");
+    println!("  lanes            {LANES} x 32 bits (SIMD-divisible; narrowest native width)");
+    println!("  round            one partition into 4 groups of 4, ChaCha's quarter round");
+    println!(
+        "  cost             IDENTICAL to ChaCha by construction — wiring is the only variable"
+    );
+    println!("  screen           full avalanche at {SCREEN_ROUNDS} rounds, tolerance {TOLERANCE}");
+    println!("  samples          {samples} (recommended_samples, adequacy-checked)");
+    println!("  candidates       {n}, seed {seed}\n");
+
+    // ------------------------------------------------------------- controls
+    println!("-- CONTROL: ChaCha's own wiring through this identical path --");
+    let cc = chacha_topology();
+    for r in [SCREEN_ROUNDS, 4] {
+        let (full, dev) = avalanches_at(&cc, r, samples, 1);
+        println!(
+            "   chacha wiring @ {r} rounds: max_dev {dev:.4}  full avalanche {}",
+            if full { "YES" } else { "no" }
+        );
+    }
+    let sweep = rounds_to_avalanche(
+        &TopologyPermutation {
+            topology: cc.clone(),
+        },
+        12,
+        samples,
+        TOLERANCE,
+        1,
+    );
+    println!(
+        "   chacha wiring rounds-to-avalanche: {:?}",
+        sweep.rounds_to_avalanche
+    );
+    if sweep.rounds_to_avalanche != Some(4) {
+        println!("\n   *** CONTROL FAILED — the harness disagrees with the registry.");
+        println!("   *** No ranking below this line means anything. Stopping.");
+        return;
+    }
+    println!("   Control holds: 4 rounds, matching the registered `chacha`.\n");
+
+    // -------------------------------------------------------- diameter pass
+    let mut probe = statelab_crypto::avalanche::Probe::new(seed);
+    let mut diam_hist = [0usize; 8];
+    let mut disconnected = 0usize;
+    let mut screened = 0usize;
+    let mut hits: Vec<(Topology, f64)> = Vec::new();
+
+    let t0 = std::time::Instant::now();
+    for i in 0..n {
+        let t = random_topology(&mut probe);
+        match t.diameter() {
+            None => {
+                disconnected += 1;
+                continue;
+            }
+            Some(d) => {
+                diam_hist[d.min(7)] += 1;
+                // Dependency spreads at most one hop per round, so a diameter
+                // above the screen round count cannot possibly avalanche there.
+                if d > SCREEN_ROUNDS {
+                    continue;
+                }
+            }
+        }
+        screened += 1;
+        let (full, dev) = avalanches_at(&t, SCREEN_ROUNDS, samples, 1);
+        if full {
+            hits.push((t, dev));
+        }
+        if i % 2000 == 0 && i > 0 {
+            println!(
+                "   ...{i}/{n}  screened {screened}  hits {}  ({:.0}s)",
+                hits.len(),
+                t0.elapsed().as_secs_f64()
+            );
+        }
+    }
+
+    println!("\n-- Diameter distribution over {n} sampled wirings --");
+    println!("   disconnected (can never avalanche): {disconnected}");
+    for (d, &c) in diam_hist.iter().enumerate() {
+        if c > 0 {
+            let note = if d > SCREEN_ROUNDS { "  (pruned)" } else { "" };
+            println!("   diameter {d}: {c}{note}");
+        }
+    }
+    println!("\n   {screened} of {n} survived the pre-filter and were measured.",);
+    println!("   Pre-filter avoided {} avalanche matrices.", n - screened);
+    println!("   Elapsed {:.0}s.\n", t0.elapsed().as_secs_f64());
+
+    // -------------------------------------------------------------- verdict
+    if hits.is_empty() {
+        println!("-- RESULT: NO WIRING BEAT 4 ROUNDS --");
+        println!("   {screened} distinct wirings measured at {SCREEN_ROUNDS} rounds, none reached");
+        println!("   full avalanche. ChaCha's column/diagonal choice is not beaten on");
+        println!("   this axis by random search at this sample size.");
+        println!();
+        println!("   This is a NEGATIVE result and it is worth exactly what it says:");
+        println!("   random sampling of {n} wirings found nothing. It does NOT show");
+        println!("   no such wiring exists — the space of partition pairs is roughly");
+        println!("   2.6e6 squared, so this covers a vanishing fraction of it.");
+        return;
+    }
+
+    println!(
+        "-- {} CANDIDATE(S) REACHED AVALANCHE AT {SCREEN_ROUNDS} ROUNDS --",
+        hits.len()
+    );
+    println!(
+        "   Re-checking each on {} disjoint seeds — item (10).\n",
+        CONFIRM_SEEDS.len()
+    );
+    for (t, dev) in hits.iter().take(10) {
+        let per_seed: Vec<bool> = CONFIRM_SEEDS
+            .iter()
+            .map(|&s| avalanches_at(t, SCREEN_ROUNDS, samples, s).0)
+            .collect();
+        let agree = per_seed.iter().filter(|&&b| b).count();
+        println!("   wiring {:?}", t.partitions[0]);
+        println!("          {:?}", t.partitions[1]);
+        println!(
+            "     diameter {:?}  screen max_dev {dev:.4}  confirmed {agree}/{}",
+            t.diameter(),
+            CONFIRM_SEEDS.len()
+        );
+        if agree == CONFIRM_SEEDS.len() {
+            println!("     *** HOLDS ON ALL SEEDS — this is a real candidate. ***");
+        } else {
+            println!("     rejected: single-seed artefact, exactly what item (10) exists for.");
+        }
+    }
+
+    println!("\n   A confirmed hit is a CANDIDATE WORTH EVALUATING, not a result.");
+    println!("   Per PHASE_L §4: avalanche is a proxy. A design can score perfectly");
+    println!("   here and still carry an exploitable differential trail that only a");
+    println!("   MILP/SAT search would surface. CLAASP has not been run on anything.");
+}

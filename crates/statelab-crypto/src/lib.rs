@@ -43,6 +43,7 @@ pub mod render;
 pub mod stream;
 pub mod structural;
 pub mod systems;
+pub mod topology;
 
 pub use permutation::{Permutation, SmallMap};
 pub use stream::{Extract, StreamConfig};
