@@ -84,6 +84,12 @@ pub fn chacha20_block(key: &[u8; 32], counter: u32, nonce: &[u8; 12], out: &mut 
 /// construction Bernstein argues is unnecessary. Its cost floor is two block
 /// calls per request regardless of how few bytes were asked for — one for the
 /// output, one for the ratchet.
+/// `Clone` is derived deliberately, for [`crate::lifecycle`]. Copying live key
+/// material is normally a smell — but `fork(2)` copies it whether the type
+/// permits it or not, and the lifecycle harness exists to model exactly that.
+/// Making the copy expressible in the type is more honest than pretending the
+/// state cannot be duplicated.
+#[derive(Clone)]
 pub struct NaiveRekeyRng {
     key: [u8; 32],
     blocks: u64,
@@ -135,6 +141,11 @@ impl ForwardSecureRng for NaiveRekeyRng {
 /// Forward secrecy is structural rather than an extra step, so a small request
 /// costs a fraction of a block call once the refill is amortised. This is the
 /// construction that removed the tradeoff H1 was built on.
+/// `Clone` is derived for [`crate::lifecycle`] — see the note on
+/// [`NaiveRekeyRng`]. Note what cloning this type copies: the key **and** the
+/// unconsumed remainder of the buffer. A forked child inherits both, which is
+/// precisely why forward secrecy does not imply fork safety.
+#[derive(Clone)]
 pub struct FastKeyErasureRng {
     key: [u8; 32],
     buffer: Vec<u8>,

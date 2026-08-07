@@ -35,6 +35,7 @@ pub mod bic;
 pub mod correlation;
 pub mod counter_based;
 pub mod generator;
+pub mod lifecycle;
 pub mod linearity;
 pub mod permutation;
 pub mod qr_diffusion;
