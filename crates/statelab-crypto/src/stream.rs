@@ -210,11 +210,7 @@ pub fn emit_block<P: Permutation + ?Sized>(
 
 /// Convenience wrapper allocating its own scratch buffer. For callers that
 /// fetch a handful of blocks rather than stream them.
-pub fn block_bytes<P: Permutation + ?Sized>(
-    perm: &P,
-    cfg: &StreamConfig,
-    block: u64,
-) -> Vec<u8> {
+pub fn block_bytes<P: Permutation + ?Sized>(perm: &P, cfg: &StreamConfig, block: u64) -> Vec<u8> {
     let mut scratch = vec![0u8; perm.state_bytes()];
     let mut out = Vec::with_capacity(cfg.extract.output_bytes(perm.state_bytes()));
     emit_block(perm, cfg, block, &mut scratch, &mut out);

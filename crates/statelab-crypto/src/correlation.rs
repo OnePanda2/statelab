@@ -217,11 +217,7 @@ pub fn seed_distance(a: u64, b: u64) -> u32 {
 }
 
 /// Collects `blocks` blocks of output for one seed.
-fn collect_stream<P: Permutation + ?Sized>(
-    perm: &P,
-    cfg: &StreamConfig,
-    blocks: usize,
-) -> Vec<u8> {
+fn collect_stream<P: Permutation + ?Sized>(perm: &P, cfg: &StreamConfig, blocks: usize) -> Vec<u8> {
     let out_bytes = cfg.extract.output_bytes(perm.state_bytes());
     let mut scratch = vec![0u8; perm.state_bytes()];
     let mut one = Vec::with_capacity(out_bytes);
@@ -484,8 +480,7 @@ impl BitPositionProfile {
 
     /// Adequate only if *both* grids are.
     pub fn sampling_is_adequate(&self, tolerance: f64) -> bool {
-        self.bias.sampling_is_adequate(tolerance)
-            && self.autocorr.sampling_is_adequate(tolerance)
+        self.bias.sampling_is_adequate(tolerance) && self.autocorr.sampling_is_adequate(tolerance)
     }
 }
 
@@ -539,7 +534,9 @@ fn profile_from_blocks(
 ) -> BitPositionProfile {
     let mut bias = vec![0.0f64; cols];
     for (c, slot) in bias.iter_mut().enumerate() {
-        let ones = (0..blocks).filter(|&b| bit_at(stream, b * cols + c)).count();
+        let ones = (0..blocks)
+            .filter(|&b| bit_at(stream, b * cols + c))
+            .count();
         *slot = ones as f64 / blocks as f64;
     }
 
@@ -753,7 +750,10 @@ mod tests {
                 }
             }
         }
-        assert!(low && mid && high, "need distance-1 pairs at low, mid and high bits");
+        assert!(
+            low && mid && high,
+            "need distance-1 pairs at low, mid and high bits"
+        );
     }
 
     // -- N3-DIFFUSION ----------------------------------------------------------------
@@ -902,12 +902,7 @@ mod tests {
             ..StreamConfig::default()
         };
         let r = bit_position_profile(&KlimovShamir::default(), &cfg, 1024, 4);
-        let stuck = r
-            .bias
-            .p
-            .iter()
-            .filter(|v| (*v - 0.5).abs() > 0.45)
-            .count();
+        let stuck = r.bias.p.iter().filter(|v| (*v - 0.5).abs() > 0.45).count();
         assert!(
             stuck as f64 / r.bias.p.len() as f64 > 0.7,
             "expected most bit positions frozen, got {stuck}/{}",
@@ -1070,7 +1065,10 @@ mod tests {
             p: vec![0.5; 66 * 512],
         };
         assert!(!g.sampling_is_adequate(0.05));
-        assert!(g.max_deviation() <= 0.05, "the cells themselves are perfect");
+        assert!(
+            g.max_deviation() <= 0.05,
+            "the cells themselves are perfect"
+        );
         // Perfect cells, inadequate sampling: the verdict must not be trusted.
         let n = recommended_blocks(66 * 512, 0.05);
         let g2 = DeviationGrid { samples: n, ..g };

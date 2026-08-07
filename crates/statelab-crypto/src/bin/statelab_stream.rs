@@ -112,8 +112,8 @@ fn parse_args() -> Result<Args, String> {
             }
             "--extract" => {
                 let raw = value()?;
-                a.cfg.extract = Extract::parse(&raw)
-                    .ok_or_else(|| format!("unknown --extract mode: {raw}"))?;
+                a.cfg.extract =
+                    Extract::parse(&raw).ok_or_else(|| format!("unknown --extract mode: {raw}"))?;
             }
             other => return Err(format!("unknown flag: {other}\n\n{}", usage())),
         }

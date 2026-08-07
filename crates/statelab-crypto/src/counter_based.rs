@@ -102,7 +102,10 @@ pub fn philox4x64(ctr: [u64; 4], key: [u64; 2], rounds: usize) -> [u64; 4] {
 /// `X[i] = ctr[i] + ks[i]`, and after every fourth round the key is re-injected
 /// with a rotating offset and a round-group counter added to `X3`.
 pub fn threefry4x64(ctr: [u64; 4], key: [u64; 4], rounds: usize) -> [u64; 4] {
-    assert!(rounds <= 72, "Threefry-4x64 is defined for at most 72 rounds");
+    assert!(
+        rounds <= 72,
+        "Threefry-4x64 is defined for at most 72 rounds"
+    );
     let mut ks = [key[0], key[1], key[2], key[3], SKEIN_KS_PARITY64];
     for k in &key {
         ks[4] ^= k;

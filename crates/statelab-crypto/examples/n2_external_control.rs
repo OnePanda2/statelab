@@ -76,7 +76,11 @@ fn main() {
         // are byte-identical and the combined stream has period WIDTH blocks.
         let lane = index % WIDTH;
         let cfg = StreamConfig {
-            seed: if duplicate { base.seed } else { base.seed + lane },
+            seed: if duplicate {
+                base.seed
+            } else {
+                base.seed + lane
+            },
             ..base
         };
         emit_block(&perm, &cfg, index / WIDTH, &mut scratch, &mut block_out);

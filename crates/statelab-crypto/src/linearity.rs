@@ -702,7 +702,9 @@ mod tests {
     fn direction_sets_have_the_requested_shape() {
         let low = lane_bits(64, 1, 0, 16);
         assert_eq!(low.len(), 16);
-        assert!(low.iter().all(|m| m.iter().map(|b| b.count_ones()).sum::<u32>() == 1));
+        assert!(low
+            .iter()
+            .all(|m| m.iter().map(|b| b.count_ones()).sum::<u32>() == 1));
         // Lane 1 is bytes 8..16.
         assert!(low.iter().all(|m| m[8..16].iter().any(|&b| b != 0)));
 
@@ -710,7 +712,12 @@ mod tests {
         assert_eq!(spread.len(), 16);
         let touched = spread
             .iter()
-            .flat_map(|m| m.iter().enumerate().filter(|(_, &b)| b != 0).map(|(i, _)| i / 8))
+            .flat_map(|m| {
+                m.iter()
+                    .enumerate()
+                    .filter(|(_, &b)| b != 0)
+                    .map(|(i, _)| i / 8)
+            })
             .collect::<std::collections::BTreeSet<_>>();
         assert!(touched.len() > 1, "across_lanes must span several lanes");
     }

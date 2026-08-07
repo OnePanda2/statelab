@@ -75,7 +75,10 @@ fn main() {
     let system = args.get(3).map_or("chacha", |s| s.as_str());
 
     let Some(perm) = permutation_by_name(system) else {
-        eprintln!("unknown system: {system}\navailable: {}", PERMUTATIONS.join(", "));
+        eprintln!(
+            "unknown system: {system}\navailable: {}",
+            PERMUTATIONS.join(", ")
+        );
         std::process::exit(2);
     };
     let perm = perm.as_ref();
@@ -87,8 +90,14 @@ fn main() {
         zero_frac: 0.0,
         ..StreamConfig::default()
     };
-    let cfg_a = StreamConfig { seed: seed_a, ..base };
-    let cfg_b = StreamConfig { seed: seed_b, ..base };
+    let cfg_a = StreamConfig {
+        seed: seed_a,
+        ..base
+    };
+    let cfg_b = StreamConfig {
+        seed: seed_b,
+        ..base
+    };
 
     let stdout = io::stdout();
     let mut out = BufWriter::with_capacity(1 << 16, stdout.lock());

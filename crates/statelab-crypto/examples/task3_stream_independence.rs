@@ -147,7 +147,9 @@ fn main() {
     println!("                   table below; keyed N3-DIFFUSION measures the key schedule");
     println!("     rounds        fixed at {FIXED_ROUNDS} for every design");
     println!("     tolerance     {TOLERANCE}");
-    println!("     N1            12 seeds, 66 pairs, incl. Hamming-distance-1 at low/mid/high bits");
+    println!(
+        "     N1            12 seeds, 66 pairs, incl. Hamming-distance-1 at low/mid/high bits"
+    );
     println!("     N2            8 seeds interleaved, lags swept to 16");
     println!("     N3-DIFF       seed → block 0, averaged over random base seeds");
     println!("     N4-POS        5 seeds, 4096 blocks, lags 1..8; median reported\n");
@@ -246,7 +248,10 @@ fn main() {
 
     // -- input construction, held against the same axis as the dose-response
     println!("\n-- Input construction at 3 rounds (chacha): keyed vs zero-filled --");
-    println!("   {:>10} {:>10} {:>10} {:>10}", "zero_frac", "N1", "N3-DIF", "N4-POS");
+    println!(
+        "   {:>10} {:>10} {:>10} {:>10}",
+        "zero_frac", "N1", "N3-DIF", "N4-POS"
+    );
     for zf in [0.0, 0.25, 0.5, 0.75, 1.0] {
         let cfg = StreamConfig {
             zero_frac: zf,
@@ -259,13 +264,8 @@ fn main() {
             N4_SEEDS
                 .iter()
                 .map(|&s| {
-                    bit_position_profile(
-                        chacha.as_ref(),
-                        &StreamConfig { seed: s, ..cfg },
-                        4096,
-                        8,
-                    )
-                    .max_deviation()
+                    bit_position_profile(chacha.as_ref(), &StreamConfig { seed: s, ..cfg }, 4096, 8)
+                        .max_deviation()
                 })
                 .collect(),
         );

@@ -213,7 +213,10 @@ fn full() {
     }
 
     println!("\n-- C. The tall-thin regime is a DIFFERENT property, not a worse one --");
-    println!("   {:<30} {:>18}", "chacha rounds", "rank, 64x512 (5 seeds)");
+    println!(
+        "   {:<30} {:>18}",
+        "chacha rounds", "rank, 64x512 (5 seeds)"
+    );
     for r in [1usize, 2, 3, 4] {
         let ranks: Vec<String> = SEEDS
             .iter()
