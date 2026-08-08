@@ -23,6 +23,11 @@
 >
 > The measurements in this document stand. The inference in consequence 3 did
 > not, and has been replaced.
+>
+> **Dr. Sobti's positions below are our paraphrase of private correspondence,
+> summarised in our own words and not yet checked back with him.** Any
+> mischaracterisation is ours. His *mechanism* confirmation is the part we are
+> most confident of; the surrounding context is reported as his account.
 
 Sobti & Ganesan (2016) searched all 32⁴ possible rotation-constant combinations for the ChaCha quarter round and reported over 58,000 combinations that score better than ChaCha's own [16, 12, 8, 7], proposing an alternative design (MCC) with constants [4, 17, 8, 0]. While reproducing that search, we found that the diffusion metric they used cannot actually see the fourth rotation constant at all — rotating a value doesn't change the statistic being measured, so of the 32⁴ points supposedly searched, only 32³ are distinguishable to the metric. This doesn't mean the paper's numbers are wrong; it means the search space was smaller than reported **within a single quarter round**, and it is what made MCC's `l = 0` available as a free efficiency choice — a deliberate trade-off, per the author, not an oversight. At the **double round**, where ChaCha actually runs, `l` becomes visible again, and we have verified that directly.
 
@@ -80,7 +85,53 @@ The single-round rows are the positive control and reproduce the original findin
 
 Best `l` by double-round mean in our run is 17 for MCC's other three constants and 26 for ChaCha's — neither is 0, which is consistent with Dr. Sobti's report that the ten best double-round sets all carry different nonzero `l`.
 
-**Not verified here:** his specific figures — that ~1.7% of a million rotation sets beat [4, 17, 8, 0] on double-round diffusion, versus 24–28% for Salsa's and ChaCha's prescribed constants. Those come from the follow-up paper's own search and are cited to it, not to this run.
+**Not verified here:** his specific figures — that ~1.7% of a million rotation sets beat [4, 17, 8, 0] on double-round diffusion, versus 24–28% for Salsa's and ChaCha's prescribed constants. Those come from the follow-up paper's own search and are cited to it, not to this run:
+
+> Sobti, R. & Geetha, G., *"A Comparison of Diffusion Properties of Salsa, ChaCha, and MCC Core,"* in **Security in Computing and Communications (SSCC 2016)**, Communications in Computer and Information Science, Springer, pp. 87–98. DOI: [10.1007/978-981-10-2738-3_8](https://doi.org/10.1007/978-981-10-2738-3_8)
+
+(Same second author as the 2016 quarter-round paper — published there as *Geetha Ganesan*, here as *G. Geetha*. One person, two name orderings.)
+
+### The blind spot is width-free
+
+The invariance argument never mentions word width: Hamming weight is
+rotation-invariant at 64 bits exactly as at 32, and nothing reads `x1` again
+inside the round either way. So the blind spot should carry to any word width a
+design chooses. That is close to a prediction from proof rather than from
+measurement, which makes it worth checking rather than assuming — the MCC core
+was subsequently used at 64-bit width in *Cocktail* (Sobti, Bagga & Kaur, 2021,
+DOI: [10.1109/ICRITO51393.2021.9596510](https://doi.org/10.1109/ICRITO51393.2021.9596510)),
+whose abstract states it works on both 32- and 64-bit words.
+
+Repeating the whole experiment at 64 bits (`examples/cocktail_64_l.rs`), with
+BLAKE2b's 64-bit constants [32, 24, 16, 63] as a control — a deployed 64-bit ARX
+design whose fourth constant is deliberately nonzero. **The set [52, 41, 16, 0] was
+described to us in correspondence as Cocktail's; we have not checked it against the
+2021 paper, and nothing below depends on it — the width-free result holds for any
+constants, and the second set is BLAKE2b's, which is public.**
+
+| | identical to `l = 0` | spread as % of mean |
+|---|---|---|
+| **1 round**, 64-bit, [52, 41, 16, \*] | **64 / 64** | **0.0000%** |
+| **1 round**, 64-bit, BLAKE2b [32, 24, 16, \*] | **64 / 64** | **0.0000%** |
+| **2 rounds**, 64-bit, [52, 41, 16, \*] | 1 / 64 | 0.2343% |
+| **2 rounds**, 64-bit, BLAKE2b [32, 24, 16, \*] | 1 / 64 | 0.2104% |
+
+**The blind spot is width-free, confirmed.** All 64 matrices identical at one
+round, on both constant sets.
+
+**And a prediction of ours failed, which is the more useful half.** We predicted
+the double-round effect would stay at or below the 32-bit case's ~0.11%,
+reasoning that a wider state diffuses further per round. It came in at
+**0.21–0.23% — about twice as large, not smaller.** The qualification above
+survives but is materially weaker at 64 bits: instead of being ~5× below the
+~0.5% spread Dr. Sobti attributes to noise, the effect is only ~2× below it.
+Same side of the line, much less margin. We were wrong about the direction, and
+the reasoning behind the prediction was wrong too.
+
+Neither design's own fourth constant is the double-round optimum on this metric
+(best `l` was 61 and 41 respectively, against 0 and 63 as shipped) — consistent
+with the ~0.1–0.2% effect sizes, at which "optimum" is not a meaningful
+selection.
 
 ## What we're not claiming
 
@@ -93,7 +144,7 @@ Best `l` by double-round mean in our run is 17 for MCC's other three constants a
 
 The relevant code lives in `crates/statelab-crypto` (`qr_diffusion.rs` for the 2016 metric implementation, `avalanche.rs` for the independent bit-level avalanche test used as a cross-check). Fix any three rotation constants, sweep the fourth across 0–31, and diff the resulting matrices — they will match exactly.
 
-For the double-round result, run `cargo run -p statelab-crypto --release --example double_round_l`. It prints the single-round control and the double-round test together, so the two regimes can be compared in one output.
+For the double-round result, run `cargo run -p statelab-crypto --release --example double_round_l`. It prints the single-round control and the double-round test together, so the two regimes can be compared in one output. For the 64-bit replication, `--example cocktail_64_l`.
 
 ---
 *If you're a maintainer of code that relies on this metric, or you're Dr. Sobti or Dr. Ganesan and think we've made an error somewhere, please open an issue — we'd genuinely like to be corrected if that's the case.*
