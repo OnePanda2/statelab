@@ -39,6 +39,7 @@ pub mod lifecycle;
 pub mod linearity;
 pub mod permutation;
 pub mod qr_diffusion;
+pub mod quarter_round;
 pub mod render;
 pub mod stream;
 pub mod structural;
