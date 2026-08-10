@@ -59,6 +59,7 @@ use statelab_crypto::avalanche::{avalanche_matrix, recommended_samples};
 use statelab_crypto::bench::{calibrate_tsc_ghz, measure};
 use statelab_crypto::bic::{bic_matrix, bic_recommended_samples};
 use statelab_crypto::linearity::{random_matrix_rank_trials, rank_trials, InputSet};
+use statelab_crypto::saturation::{crossings_above, saturation_point};
 use statelab_crypto::systems::ChaCha;
 use std::hint::black_box;
 
@@ -218,58 +219,37 @@ fn main() {
         );
     }
 
-    // ---- Saturation by a STAYS-DOWN criterion, not a first crossing.
+    // ---- Saturation, via the crate's stays-down criterion.
     //
-    // A first-crossing test is wrong for any statistic that straddles its
-    // threshold. BIC does exactly that here: ChaCha reads 0.079-0.090 against a
-    // 0.0848 floor at EVERY round from 4 to 20, so it crosses back and forth and
-    // "first clean" reports whichever round happened to land low. That is
-    // PHASE_H §5's open item (the fair-coin null reads ~25% below every real
-    // permutation) surfacing as a threshold artefact, and PHASE_M item (17): the
-    // failure mode moves as the regime changes.
-    //
-    // Saturated at the first R such that the statistic stays within the band for
-    // R and EVERY larger round tested.
+    // The straddle-aware test now lives in `statelab_crypto::saturation`, NOT in
+    // this driver. It was inline here, produced a false finding, was fixed
+    // inline, and stayed inline while the next driver went without it — item
+    // (21) exactly. Paid: the logic, the band, and a regression fixture built
+    // from THIS driver's own output are all in the crate, and this file calls
+    // them.
     const BAND: f64 = 1.15;
 
-    let saturates_at = |ok: &dyn Fn(usize) -> bool| -> Option<usize> {
-        (0..ROUNDS.len())
-            .find(|&i| ROUNDS[i..].iter().all(|&r| ok(r)))
-            .map(|i| ROUNDS[i])
-    };
+    let av_pts: Vec<(f64, f64)> = av_series.iter().map(|&(r, d)| (r as f64, d)).collect();
+    let bic_pts: Vec<(f64, f64)> = bic_series.iter().map(|&(r, w, _)| (r as f64, w)).collect();
+    let bic_floor = bic_series.first().map(|&(_, _, f)| f).unwrap_or(0.0);
 
-    let av_sat = saturates_at(&|r| {
-        av_series
-            .iter()
-            .find(|(rr, _)| *rr == r)
-            .is_some_and(|(_, d)| *d <= TOLERANCE)
-    });
-    let bic_sat = saturates_at(&|r| {
-        bic_series
-            .iter()
-            .find(|(rr, _, _)| *rr == r)
-            .is_some_and(|(_, w, f)| *w <= f * BAND)
-    });
+    let av_sat = saturation_point(&av_pts, TOLERANCE, 1.0);
+    let bic_sat = saturation_point(&bic_pts, bic_floor, BAND);
 
     println!(
         "
 == Where each measure saturates (stays-down, band {BAND:.2}x floor) =="
     );
     match av_sat {
-        Some(r) => println!("  avalanche  saturates at {r} rounds and stays"),
+        Some(r) => println!("  avalanche  saturates at {r:.0} rounds and stays"),
         None => println!("  avalanche  never saturates in the tested range"),
     }
     match bic_sat {
-        Some(r) => println!("  BIC        saturates at {r} rounds and stays"),
+        Some(r) => println!("  BIC        saturates at {r:.0} rounds and stays"),
         None => println!("  BIC        never saturates in the tested range"),
     }
 
-    let tested = bic_series.iter().filter(|(r, _, _)| *r >= 4).count();
-    let crossings = bic_series
-        .iter()
-        .filter(|(r, _, _)| *r >= 4)
-        .filter(|(_, w, f)| w > f)
-        .count();
+    let (crossings, tested) = crossings_above(&bic_pts, bic_floor, 4.0);
     println!("  BIC crosses its RAW floor {crossings} of {tested} times at r>=4 — which is");
     println!("  why the raw threshold cannot locate a saturation point at all.");
 
@@ -277,19 +257,19 @@ fn main() {
         (Some(a), Some(b)) if b > a => {
             println!(
                 "
-  >>> PREDICTION 2 HOLDS. BIC binds at {b}, avalanche cleared at {a}."
+  >>> PREDICTION 2 HOLDS. BIC binds at {b:.0}, avalanche cleared at {a:.0}."
             );
         }
-        (Some(a), Some(b)) if b == a => {
+        (Some(a), Some(b)) if (b - a).abs() < f64::EPSILON => {
             println!(
                 "
   >>> PREDICTION 2 FAILS, in the cleaner direction recorded in"
             );
-            println!("      advance. Avalanche and BIC BOTH saturate at {a}. Every");
+            println!("      advance. Avalanche and BIC BOTH saturate at {a:.0}. Every");
             println!("      statistical measure this crate has agrees, so the entire gap");
-            println!("      from {a} to 20 is CRYPTANALYTIC margin with NO statistical");
+            println!("      from {a:.0} to 20 is CRYPTANALYTIC margin with NO statistical");
             println!("      component whatsoever. The batteries have nothing further to");
-            println!("      say about round count above {a}, and saying otherwise would");
+            println!("      say about round count above {a:.0}, and saying otherwise would");
             println!("      be reading their noise.");
         }
         _ => println!(

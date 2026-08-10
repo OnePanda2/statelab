@@ -65,7 +65,7 @@
 //!    amount on this machine, `PHASE_N`'s direction has scalar value after all,
 //!    and the hardware objection to it is withdrawn.
 
-use statelab_crypto::bench::{calibrate_tsc_ghz, measure};
+use statelab_crypto::bench::{calibrate_tsc_ghz, measure, noise_floor_pct, rotated_battery};
 use std::hint::black_box;
 
 const ITERS: u64 = 300_000;
@@ -146,18 +146,6 @@ macro_rules! time_set {
     }};
 }
 
-/// Median of a set of readings.
-fn median(mut v: Vec<f64>) -> f64 {
-    v.sort_by(|a, b| a.partial_cmp(b).expect("no NaN timings"));
-    v[v.len() / 2]
-}
-
-fn spread_pct_of(v: &[f64]) -> f64 {
-    let hi = v.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let lo = v.iter().cloned().fold(f64::INFINITY, f64::min);
-    100.0 * (hi - lo) / lo
-}
-
 fn main() {
     let ghz = calibrate_tsc_ghz();
     println!("DOES BYTE ALIGNMENT BUY ANYTHING IN SCALAR CODE?\n");
@@ -180,29 +168,25 @@ fn main() {
     println!("                this fails too, the benchmark resolves nothing and");
     println!("                prediction 1 is unreadable.\n");
 
-    let mut runs: [Vec<f64>; 4] = [vec![], vec![], vec![], vec![]];
-    for b in 0..BATTERIES {
-        // Rotate the starting point so no constant set is systematically last.
-        for k in 0..4usize {
-            let which = (b + k) % 4;
-            let v = match which {
-                0 => time_set!("chacha", 16, 12, 8, 7),
-                1 => time_set!("aligned", 16, 24, 8, 16),
-                2 => time_set!("unaligned", 15, 13, 11, 7),
-                _ => time_set!("mcc", 4, 17, 8, 0),
-            };
-            runs[which].push(v);
-        }
-    }
+    // Rotated batteries via the crate helper, NOT hand-rolled here. The
+    // fixed-order defect this fixes was diagnosed in PHASE_O, written up, and
+    // then reproduced by the very next driver because the fix lived in an
+    // example. Item (21), paid.
+    const LABELS: [&str; 4] = ["chacha", "all-aligned", "none-aligned", "mcc"];
+    let cases = rotated_battery(&LABELS, BATTERIES, |i| match i {
+        0 => time_set!("chacha", 16, 12, 8, 7),
+        1 => time_set!("aligned", 16, 24, 8, 16),
+        2 => time_set!("unaligned", 15, 13, 11, 7),
+        _ => time_set!("mcc", 4, 17, 8, 0),
+    });
+
     println!("  per-set run-to-run spread (the noise floor this must beat):");
-    for (i, label) in ["chacha", "all-aligned", "none-aligned", "mcc"]
-        .iter()
-        .enumerate()
-    {
+    for c in &cases {
         println!(
-            "    {label:<14} {:>6.2}%   readings {:?}",
-            spread_pct_of(&runs[i]),
-            runs[i]
+            "    {:<14} {:>6.2}%   readings {:?}",
+            c.label,
+            c.spread_pct,
+            c.readings
                 .iter()
                 .map(|x| format!("{x:.3}"))
                 .collect::<Vec<_>>()
@@ -210,10 +194,10 @@ fn main() {
     }
     println!();
 
-    let chacha = median(runs[0].clone());
-    let aligned = median(runs[1].clone());
-    let unaligned = median(runs[2].clone());
-    let mcc = median(runs[3].clone());
+    let chacha = cases[0].median;
+    let aligned = cases[1].median;
+    let unaligned = cases[2].median;
+    let mcc = cases[3].median;
 
     println!(
         "  {:<28} {:>9} {:>10} {:>12}",
@@ -262,10 +246,7 @@ fn main() {
         println!("      cannot resolve one instruction per quarter round and NOTHING");
         println!("      below can be concluded from it.");
     }
-    let noise = [&runs[0], &runs[1], &runs[2], &runs[3]]
-        .iter()
-        .map(|r| spread_pct_of(r))
-        .fold(f64::NEG_INFINITY, f64::max);
+    let noise = noise_floor_pct(&cases);
     println!("  worst per-set run-to-run noise  {noise:.2}%  <-- the bar to clear");
     println!();
     if spread_pct < noise {

@@ -263,6 +263,92 @@ impl CpuFeatures {
     }
 }
 
+/// One condition's result from a rotated battery: the median across runs, and
+/// the run-to-run spread that any claimed difference must clear.
+#[derive(Debug, Clone)]
+pub struct RotatedCase {
+    pub label: String,
+    /// Median across batteries — the reading to use.
+    pub median: f64,
+    /// `(max - min) / min` as a percentage. **The noise floor for this
+    /// condition on this machine.**
+    pub spread_pct: f64,
+    /// Every reading, in battery order, so the distribution is never discarded.
+    pub readings: Vec<f64>,
+}
+
+/// Runs `cases` `batteries` times with the **starting position rotated each
+/// time**, returning the median and run-to-run spread per case.
+///
+/// # The failure this exists to prevent
+///
+/// A first version of `PHASE_O`'s rotation-constant benchmark measured four
+/// conditions in a **fixed order** and read the last one at **+11.94%**, failing
+/// its own positive control. Repeating it gave −6.4%, −8.7%, −7.1%: the +11.94%
+/// was thermal and scheduler drift, and a fixed order hands the whole of any
+/// drift to whichever condition runs last.
+///
+/// An intermediate diagnosis blaming LLVM auto-vectorisation was **also wrong**
+/// and was withdrawn when repeated runs did not support it.
+///
+/// Two consequences are baked in here rather than left to each driver:
+///
+/// * **Order rotates**, so no condition is systematically last.
+/// * **Per-case spread is returned, not just the median.** A difference between
+///   conditions means nothing until it clears the spread *within* one. This is
+///   item (10) — a claim from one seed is a number — applied to benchmarking,
+///   where **a benchmark run is a seed**.
+///
+/// `run(i)` performs the measurement for case `i` and returns its metric. It is
+/// called `batteries × cases.len()` times.
+///
+/// Returns results in the original case order, not in execution order.
+pub fn rotated_battery<F>(labels: &[&str], batteries: usize, mut run: F) -> Vec<RotatedCase>
+where
+    F: FnMut(usize) -> f64,
+{
+    let n = labels.len();
+    let mut readings: Vec<Vec<f64>> = vec![Vec::with_capacity(batteries); n];
+    for b in 0..batteries {
+        for k in 0..n {
+            let i = (b + k) % n;
+            readings[i].push(run(i));
+        }
+    }
+    labels
+        .iter()
+        .zip(readings)
+        .map(|(label, mut r)| {
+            let mut sorted = r.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).expect("no NaN timings"));
+            let median = sorted[sorted.len() / 2];
+            let lo = sorted[0];
+            let hi = sorted[sorted.len() - 1];
+            let spread_pct = if lo > 0.0 {
+                100.0 * (hi - lo) / lo
+            } else {
+                f64::INFINITY
+            };
+            r.shrink_to_fit();
+            RotatedCase {
+                label: (*label).to_string(),
+                median,
+                spread_pct,
+                readings: r,
+            }
+        })
+        .collect()
+}
+
+/// The worst per-case spread across a battery — the bar any between-case
+/// difference has to clear before it means anything.
+pub fn noise_floor_pct(cases: &[RotatedCase]) -> f64 {
+    cases
+        .iter()
+        .map(|c| c.spread_pct)
+        .fold(f64::NEG_INFINITY, f64::max)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,6 +433,55 @@ mod tests {
             light.ns_per_iter,
             heavy.ns_per_iter
         );
+    }
+
+    #[test]
+    fn rotated_battery_visits_every_case_every_battery() {
+        let mut calls: Vec<usize> = Vec::new();
+        let out = rotated_battery(&["a", "b", "c"], 4, |i| {
+            calls.push(i);
+            i as f64 + 1.0
+        });
+        assert_eq!(calls.len(), 12);
+        for i in 0..3 {
+            assert_eq!(calls.iter().filter(|&&c| c == i).count(), 4);
+        }
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0].label, "a");
+        assert_eq!(out[2].median, 3.0);
+    }
+
+    /// The point of rotating: no case is systematically last. With 3 cases and
+    /// 3 batteries every case occupies the final slot exactly once.
+    #[test]
+    fn no_case_is_always_last() {
+        let mut order: Vec<usize> = Vec::new();
+        rotated_battery(&["a", "b", "c"], 3, |i| {
+            order.push(i);
+            0.0
+        });
+        let lasts: Vec<usize> = order.chunks(3).map(|c| *c.last().unwrap()).collect();
+        let mut seen = lasts.clone();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), 3, "each case ran last once: {lasts:?}");
+    }
+
+    /// Spread is reported, not swallowed — a drifting case must be visible.
+    #[test]
+    fn spread_exposes_a_drifting_case() {
+        let mut n = 0.0;
+        let out = rotated_battery(&["steady", "drifting"], 3, |i| {
+            n += 1.0;
+            if i == 0 {
+                10.0
+            } else {
+                10.0 + n
+            }
+        });
+        assert_eq!(out[0].spread_pct, 0.0);
+        assert!(out[1].spread_pct > 0.0);
+        assert!(noise_floor_pct(&out) == out[1].spread_pct);
     }
 
     #[test]
