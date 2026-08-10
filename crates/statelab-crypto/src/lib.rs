@@ -41,6 +41,7 @@ pub mod permutation;
 pub mod qr_diffusion;
 pub mod quarter_round;
 pub mod render;
+pub mod seeding;
 pub mod stream;
 pub mod structural;
 pub mod systems;
