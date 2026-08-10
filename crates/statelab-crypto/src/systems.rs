@@ -616,6 +616,100 @@ mod tests {
         }
     }
 
+    /// *** THE ASCON KNOWN-ANSWER TEST. ***
+    ///
+    /// Ascon is this project's only non-ARX comparator. It sits in
+    /// `BASELINE_TABLE.md`, `PHASE_G` read its GF(2) rank at z = -5.93, and
+    /// `PHASE_O` measured its cost — and until now **its permutation had never
+    /// been checked against anything but inspection.** ChaCha20 is validated
+    /// against RFC 8439, BLAKE2b against published digests, Philox/Threefry
+    /// against vendor vectors. Ascon was the gap, found while scoping the
+    /// structural search.
+    ///
+    /// `PHASE_A` refused to accept BLAKE2b's G function by inspection and
+    /// validated it by known answer. This applies the same standard.
+    ///
+    /// The reference below is transcribed **verbatim** from the Ascon team's own
+    /// reference implementation, `crypto_aead/asconaead128/ref/round.h` in
+    /// `github.com/ascon/ascon-c`, sha256
+    /// `3ed06f5c6330b085952f6626e5df4a9ca598911f33b15b3ebc5d58dddb8fda11`.
+    /// It deliberately keeps the reference's temporary-array shape rather than
+    /// our in-place form, so the two are structurally different expressions of
+    /// the same round and agreement is evidence rather than tautology.
+    fn ascon_reference_round(x: &mut [u64; 5], c: u64) {
+        #[inline]
+        fn ror(x: u64, n: u32) -> u64 {
+            x.rotate_right(n)
+        }
+        let s = x;
+        s[2] ^= c;
+        s[0] ^= s[4];
+        s[4] ^= s[3];
+        s[2] ^= s[1];
+        let mut t = [0u64; 5];
+        t[0] = s[0] ^ (!s[1] & s[2]);
+        t[1] = s[1] ^ (!s[2] & s[3]);
+        t[2] = s[2] ^ (!s[3] & s[4]);
+        t[3] = s[3] ^ (!s[4] & s[0]);
+        t[4] = s[4] ^ (!s[0] & s[1]);
+        t[1] ^= t[0];
+        t[0] ^= t[4];
+        t[3] ^= t[2];
+        t[2] = !t[2];
+        s[0] = t[0] ^ ror(t[0], 19) ^ ror(t[0], 28);
+        s[1] = t[1] ^ ror(t[1], 61) ^ ror(t[1], 39);
+        s[2] = t[2] ^ ror(t[2], 1) ^ ror(t[2], 6);
+        s[3] = t[3] ^ ror(t[3], 10) ^ ror(t[3], 17);
+        s[4] = t[4] ^ ror(t[4], 7) ^ ror(t[4], 41);
+    }
+
+    #[test]
+    fn ascon_round_matches_the_reference_implementation() {
+        let mut probe = crate::avalanche::Probe::new(0xA5C0_0000_1234_5678);
+        for trial in 0..512 {
+            let mut words = [0u64; 5];
+            for w in words.iter_mut() {
+                *w = probe.next_u64();
+            }
+            // Every round index the permutation ships with, not just round 0 —
+            // the constant enters before the S-box and a misplaced application
+            // would only show on some rounds.
+            for r in 0..12usize {
+                let mut want = words;
+                ascon_reference_round(&mut want, Ascon::round_constant(r));
+
+                let mut bytes = [0u8; 40];
+                for (i, w) in words.iter().enumerate() {
+                    bytes[i * 8..i * 8 + 8].copy_from_slice(&w.to_be_bytes());
+                }
+                Ascon.round(&mut bytes, r);
+                let mut got = [0u64; 5];
+                for (i, w) in got.iter_mut().enumerate() {
+                    *w = u64::from_be_bytes(bytes[i * 8..i * 8 + 8].try_into().expect("8"));
+                }
+
+                assert_eq!(got, want, "trial {trial}, round {r}");
+            }
+        }
+    }
+
+    /// An all-zero state is the degenerate case the S-box's NOT terms make
+    /// non-trivial, and it is where an in-place refactor most easily diverges.
+    #[test]
+    fn ascon_round_matches_the_reference_on_the_zero_state() {
+        for r in 0..12usize {
+            let mut want = [0u64; 5];
+            ascon_reference_round(&mut want, Ascon::round_constant(r));
+            let mut bytes = [0u8; 40];
+            Ascon.round(&mut bytes, r);
+            let mut got = [0u64; 5];
+            for (i, w) in got.iter_mut().enumerate() {
+                *w = u64::from_be_bytes(bytes[i * 8..i * 8 + 8].try_into().expect("8"));
+            }
+            assert_eq!(got, want, "zero state, round {r}");
+        }
+    }
+
     /// Round constants: `0xf0 - r*0x10 + r`, ending at `0x4b` for p12.
     #[test]
     fn ascon_round_constants_match_the_specification() {
