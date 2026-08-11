@@ -263,6 +263,184 @@ impl CpuFeatures {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Per-thread cycle counting
+// ---------------------------------------------------------------------------
+
+#[cfg(windows)]
+extern "system" {
+    fn GetCurrentThread() -> isize;
+    fn QueryThreadCycleTime(thread: isize, cycles: *mut u64) -> i32;
+    fn SetThreadAffinityMask(thread: isize, mask: usize) -> usize;
+}
+
+/// Cycles consumed **by the calling thread**, excluding time it was descheduled.
+///
+/// # Why this exists
+///
+/// `rdtsc` is a **constant-rate** counter: it keeps ticking while the thread is
+/// not running, so every cycle another process steals is billed to the
+/// measurement. That is a **one-directional bias, not noise** — which is why
+/// more samples never fixed it, and why four consecutive cycle measurements
+/// were voided by their own canary across two sessions (`PHASE_S`, and
+/// `arx_step_cycles`'s log). Readings of 19.6, 24.2, 12.6 and 11.4 cyc/B against
+/// a quiet-machine reference of 8.3 are that bias, not variance.
+///
+/// `QueryThreadCycleTime` is the kernel's per-thread accounting and excludes
+/// context-switched-out time, which is exactly the contaminant.
+///
+/// **What it does NOT fix**, stated so it is not oversold: cache pollution from
+/// other processes, and CPU frequency scaling. For a register-resident 64-byte
+/// workload the first is small; the second is bounded on a constant-TSC part.
+///
+/// Returns `None` where unavailable, so callers can fall back to `rdtsc` and
+/// **say which instrument produced a number**.
+pub fn thread_cycles() -> Option<u64> {
+    #[cfg(windows)]
+    {
+        let mut c: u64 = 0;
+        let ok = unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut c) };
+        if ok != 0 {
+            Some(c)
+        } else {
+            None
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+/// Pins the calling thread to one core, so a measurement is not split across
+/// cores mid-run. Best-effort; returns whether it took.
+pub fn pin_to_core(core: usize) -> bool {
+    #[cfg(windows)]
+    {
+        let mask: usize = 1usize << core;
+        let prev = unsafe { SetThreadAffinityMask(GetCurrentThread(), mask) };
+        prev != 0
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = core;
+        false
+    }
+}
+
+/// A measurement taken with **both** instruments, so contention is visible
+/// rather than assumed.
+#[derive(Debug, Clone)]
+pub struct DualTiming {
+    pub name: String,
+    pub bytes_per_iter: usize,
+    /// Best (minimum) per-iteration TSC ticks across repeats.
+    pub tsc_per_iter: f64,
+    /// Best (minimum) per-iteration *thread* cycles, or `None` if unavailable.
+    pub thread_per_iter: Option<f64>,
+    /// MEDIAN per-iteration TSC ticks — the statistic `measure` uses, kept so a
+    /// caller can see how much of a fix came from the statistic rather than
+    /// from the counter.
+    pub tsc_median_per_iter: f64,
+    /// Median per-iteration thread cycles.
+    pub thread_median_per_iter: Option<f64>,
+}
+
+impl DualTiming {
+    pub fn tsc_per_byte(&self) -> f64 {
+        self.tsc_per_iter / self.bytes_per_iter as f64
+    }
+    pub fn thread_per_byte(&self) -> Option<f64> {
+        self.thread_per_iter.map(|c| c / self.bytes_per_iter as f64)
+    }
+    /// How much of the wall-clock cycle count was *not* this thread running.
+    /// 1.0 means no contention; 2.0 means half the billed cycles were stolen.
+    pub fn contention_ratio(&self) -> Option<f64> {
+        self.thread_per_iter.map(|t| self.tsc_per_iter / t)
+    }
+}
+
+/// Times `f` with both TSC and per-thread cycles, reporting the **minimum**
+/// across repeats rather than the median.
+///
+/// # Why minimum rather than median
+///
+/// Contention can only **add** time to a measurement, never remove it. The
+/// median resists occasional outliers but is still dragged upward by *sustained*
+/// load, which is the regime that voided four previous runs. The minimum is the
+/// least-contaminated estimate of how fast the code can actually run, and is
+/// standard practice for microbenchmarks where the quantity of interest is a
+/// lower bound rather than an average.
+///
+/// `measure` is left untouched so earlier medians stay comparable with each
+/// other; this is an addition, not a replacement.
+pub fn measure_dual<F, R>(
+    name: impl Into<String>,
+    bytes_per_iter: usize,
+    iterations: u64,
+    repeats: usize,
+    mut f: F,
+) -> DualTiming
+where
+    F: FnMut() -> R,
+{
+    for _ in 0..(iterations / 4).max(1) {
+        black_box(f());
+    }
+
+    let mut best_tsc = f64::INFINITY;
+    let mut best_thread = f64::INFINITY;
+    let mut all_tsc: Vec<f64> = Vec::with_capacity(repeats);
+    let mut all_thread: Vec<f64> = Vec::with_capacity(repeats);
+    let have_thread = thread_cycles().is_some();
+
+    for _ in 0..repeats {
+        let t_before = thread_cycles();
+        let c0 = rdtsc();
+        for _ in 0..iterations {
+            black_box(f());
+        }
+        let c1 = rdtsc();
+        let t_after = thread_cycles();
+
+        let tsc = (c1.wrapping_sub(c0)) as f64 / iterations as f64;
+        all_tsc.push(tsc);
+        if tsc < best_tsc {
+            best_tsc = tsc;
+        }
+        if let (Some(a), Some(b)) = (t_before, t_after) {
+            let th = (b - a) as f64 / iterations as f64;
+            all_thread.push(th);
+            if th < best_thread {
+                best_thread = th;
+            }
+        }
+    }
+
+    let median = |mut v: Vec<f64>| -> Option<f64> {
+        if v.is_empty() {
+            return None;
+        }
+        v.sort_by(|a, b| a.partial_cmp(b).expect("no NaN timings"));
+        Some(v[v.len() / 2])
+    };
+    let tsc_med = median(all_tsc).unwrap_or(best_tsc);
+    let thread_med = median(all_thread);
+
+    DualTiming {
+        name: name.into(),
+        bytes_per_iter,
+        tsc_per_iter: best_tsc,
+        thread_per_iter: if have_thread && best_thread.is_finite() {
+            Some(best_thread)
+        } else {
+            None
+        },
+        tsc_median_per_iter: tsc_med,
+        thread_median_per_iter: if have_thread { thread_med } else { None },
+    }
+}
+
 /// One condition's result from a rotated battery: the median across runs, and
 /// the run-to-run spread that any claimed difference must clear.
 #[derive(Debug, Clone)]
@@ -482,6 +660,41 @@ mod tests {
         assert_eq!(out[0].spread_pct, 0.0);
         assert!(out[1].spread_pct > 0.0);
         assert!(noise_floor_pct(&out) == out[1].spread_pct);
+    }
+
+    #[test]
+    fn thread_cycles_is_monotonic_when_available() {
+        let Some(a) = thread_cycles() else {
+            return; // not on this platform; nothing to assert
+        };
+        let mut x = 1u64;
+        for i in 0..200_000u64 {
+            x = x.wrapping_add(black_box(i));
+        }
+        black_box(x);
+        let b = thread_cycles().expect("available once, available twice");
+        assert!(b >= a, "thread cycle counter went backwards: {a} -> {b}");
+    }
+
+    /// The whole point: thread cycles must not exceed wall-clock TSC for the
+    /// same interval, because a thread cannot run for more cycles than elapsed.
+    #[test]
+    fn thread_cycles_never_exceed_tsc() {
+        if thread_cycles().is_none() {
+            return;
+        }
+        let d = measure_dual("probe", 1, 20_000, 5, || {
+            let mut x = black_box(1u64);
+            x = x.wrapping_mul(2654435761).wrapping_add(1);
+            black_box(x)
+        });
+        let th = d.thread_per_iter.expect("available");
+        assert!(
+            th <= d.tsc_per_iter * 1.05,
+            "thread {th} exceeded tsc {} by more than rounding",
+            d.tsc_per_iter
+        );
+        assert!(d.contention_ratio().expect("ratio") >= 0.95);
     }
 
     #[test]
