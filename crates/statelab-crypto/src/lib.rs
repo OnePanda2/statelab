@@ -32,6 +32,7 @@ pub mod arx_structure;
 pub mod avalanche;
 pub mod bench;
 pub mod bic;
+pub mod branch;
 pub mod correlation;
 pub mod counter_based;
 pub mod generator;
