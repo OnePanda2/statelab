@@ -6,6 +6,14 @@ adding a new deterministic system requires **no engine changes** (Principle #6).
 
 The full, frozen design lives in [`PROJECT_BRIEF.md`](./PROJECT_BRIEF.md).
 
+## Cryptography research
+
+This repository also contains an independent finding on a 2016 ChaCha/Salsa
+diffusion-metric paper — a structural blind spot in the metric, confirmed by
+the original author (Dr. Rajeev Sobti), plus follow-up verification of a
+correction he supplied. Full writeup: [`FINDINGS.md`](./FINDINGS.md).
+The code lives in [`crates/statelab-crypto`](./crates/statelab-crypto).
+
 ## Status
 
 **All 11 roadmap phases (0–10) are complete**, including the Tauri bundler
