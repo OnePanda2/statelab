@@ -179,3 +179,7 @@ single-file build the browser host embeds). After running it, rebuild that host:
 ```bash
 cargo build --release -p statelab-app
 ```
+
+## License
+
+[MIT](./LICENSE). This is research code and has not been independently audited, so please do not use it to protect anything real.
